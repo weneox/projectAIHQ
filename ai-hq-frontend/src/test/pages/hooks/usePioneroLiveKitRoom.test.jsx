@@ -106,6 +106,17 @@ function buildAgentPlan(overrides = {}) {
       reasonCode: "stt_session_not_started",
       networkIo: false,
     },
+    llm: {
+      provider: "fast_text_llm",
+      enabled: false,
+      status: "planned",
+      turnsPlanned: 0,
+      lastInputTranscript: "",
+      lastPlannedResponse: "",
+      lastObservedAt: "",
+      reasonCode: "llm_not_started",
+      networkIo: false,
+    },
     readiness: {
       agentParticipantReady: false,
       reasonCode: "pionero_agent_runner_not_started",
@@ -153,6 +164,20 @@ describe("usePioneroLiveKitRoom", () => {
             rawAudio: "stt-raw-audio-secret",
             token: "stt-agent-token-test",
             apiSecret: "stt-agent-secret-test",
+          },
+          llm: {
+            provider: "fast_text_llm",
+            enabled: true,
+            status: "turn_plan_built",
+            turnsPlanned: 1,
+            lastInputTranscript: "Salam Pionero",
+            lastPlannedResponse: "Turn plan pending real LLM.",
+            lastObservedAt: "2026-01-02T03:04:07.000Z",
+            reasonCode: "",
+            networkIo: false,
+            rawAudio: "llm-raw-audio-secret",
+            token: "llm-agent-token-test",
+            apiSecret: "llm-agent-secret-test",
           },
         })
       );
@@ -219,6 +244,19 @@ describe("usePioneroLiveKitRoom", () => {
       "2026-01-02T03:04:06.000Z"
     );
     expect(result.current.agentSttReasonCode).toBe("");
+    expect(result.current.agentLlmProvider).toBe("fast_text_llm");
+    expect(result.current.agentLlmStatus).toBe("turn_plan_built");
+    expect(result.current.agentLlmEnabled).toBe(true);
+    expect(result.current.agentLlmNetworkIo).toBe(false);
+    expect(result.current.agentLlmTurnsPlanned).toBe(1);
+    expect(result.current.agentLlmLastInputTranscript).toBe("Salam Pionero");
+    expect(result.current.agentLlmLastPlannedResponse).toBe(
+      "Turn plan pending real LLM."
+    );
+    expect(result.current.agentLlmLastObservedAt).toBe(
+      "2026-01-02T03:04:07.000Z"
+    );
+    expect(result.current.agentLlmReasonCode).toBe("");
     expect(result.current.session.token).toBeUndefined();
     expect(JSON.stringify(result.current.session)).not.toContain("token-test");
     expect(JSON.stringify(result.current)).not.toContain("agent-token-test");
@@ -229,6 +267,9 @@ describe("usePioneroLiveKitRoom", () => {
     expect(JSON.stringify(result.current)).not.toContain("stt-raw-audio-secret");
     expect(JSON.stringify(result.current)).not.toContain("stt-agent-token-test");
     expect(JSON.stringify(result.current)).not.toContain("stt-agent-secret-test");
+    expect(JSON.stringify(result.current)).not.toContain("llm-raw-audio-secret");
+    expect(JSON.stringify(result.current)).not.toContain("llm-agent-token-test");
+    expect(JSON.stringify(result.current)).not.toContain("llm-agent-secret-test");
   });
 
   it("uses safe default STT values when the agent start-plan omits STT state", async () => {
@@ -257,6 +298,35 @@ describe("usePioneroLiveKitRoom", () => {
     expect(result.current.agentSttLastTranscript).toBe("");
     expect(result.current.agentSttLastObservedAt).toBe("");
     expect(result.current.agentSttReasonCode).toBe("");
+  });
+
+  it("uses safe default LLM values when the agent start-plan omits LLM state", async () => {
+    const createPioneroLiveKitSession = vi.fn().mockResolvedValue(buildSession());
+    const startPioneroLiveKitAgentPlan = vi
+      .fn()
+      .mockResolvedValue(buildAgentPlan({ llm: undefined }));
+    mockLiveKit.createLocalAudioTrack.mockResolvedValue({ stop: vi.fn() });
+
+    const { result } = renderHook(() =>
+      usePioneroLiveKitRoom({
+        createPioneroLiveKitSession,
+        startPioneroLiveKitAgentPlan,
+      })
+    );
+
+    await act(async () => {
+      await result.current.connect();
+    });
+
+    expect(result.current.agentLlmProvider).toBe("fast_text_llm");
+    expect(result.current.agentLlmStatus).toBe("idle");
+    expect(result.current.agentLlmEnabled).toBe(false);
+    expect(result.current.agentLlmNetworkIo).toBe(false);
+    expect(result.current.agentLlmTurnsPlanned).toBe(0);
+    expect(result.current.agentLlmLastInputTranscript).toBe("");
+    expect(result.current.agentLlmLastPlannedResponse).toBe("");
+    expect(result.current.agentLlmLastObservedAt).toBe("");
+    expect(result.current.agentLlmReasonCode).toBe("");
   });
 
   it("updates participants from LiveKit room events", async () => {
@@ -348,6 +418,15 @@ describe("usePioneroLiveKitRoom", () => {
     expect(result.current.agentSttLastTranscript).toBe("");
     expect(result.current.agentSttLastObservedAt).toBe("");
     expect(result.current.agentSttReasonCode).toBe("");
+    expect(result.current.agentLlmProvider).toBe("fast_text_llm");
+    expect(result.current.agentLlmStatus).toBe("idle");
+    expect(result.current.agentLlmEnabled).toBe(false);
+    expect(result.current.agentLlmNetworkIo).toBe(false);
+    expect(result.current.agentLlmTurnsPlanned).toBe(0);
+    expect(result.current.agentLlmLastInputTranscript).toBe("");
+    expect(result.current.agentLlmLastPlannedResponse).toBe("");
+    expect(result.current.agentLlmLastObservedAt).toBe("");
+    expect(result.current.agentLlmReasonCode).toBe("");
   });
 
   it("keeps the browser room live when the agent start-plan fails", async () => {
@@ -395,6 +474,17 @@ describe("usePioneroLiveKitRoom", () => {
     expect(result.current.agentSttLastTranscript).toBe("");
     expect(result.current.agentSttLastObservedAt).toBe("");
     expect(result.current.agentSttReasonCode).toBe(
+      "pionero_agent_start_plan_failed"
+    );
+    expect(result.current.agentLlmProvider).toBe("fast_text_llm");
+    expect(result.current.agentLlmStatus).toBe("error");
+    expect(result.current.agentLlmEnabled).toBe(false);
+    expect(result.current.agentLlmNetworkIo).toBe(false);
+    expect(result.current.agentLlmTurnsPlanned).toBe(0);
+    expect(result.current.agentLlmLastInputTranscript).toBe("");
+    expect(result.current.agentLlmLastPlannedResponse).toBe("");
+    expect(result.current.agentLlmLastObservedAt).toBe("");
+    expect(result.current.agentLlmReasonCode).toBe(
       "pionero_agent_start_plan_failed"
     );
   });

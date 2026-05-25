@@ -35,6 +35,12 @@ const STT_STATUSES = new Set([
   "transcript_observed",
   "error",
 ]);
+const LLM_STATUSES = new Set([
+  "idle",
+  "planned",
+  "turn_plan_built",
+  "error",
+]);
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim() || fallback;
@@ -112,6 +118,25 @@ function readAgentSttState(stt = {}) {
   };
 }
 
+function readAgentLlmState(llm = {}) {
+  const payload = llm && typeof llm === "object" && !Array.isArray(llm)
+    ? llm
+    : {};
+  const status = s(payload.status, "idle");
+
+  return {
+    agentLlmProvider: s(payload.provider, "fast_text_llm"),
+    agentLlmStatus: LLM_STATUSES.has(status) ? status : "idle",
+    agentLlmEnabled: payload.enabled === true,
+    agentLlmNetworkIo: payload.networkIo === true,
+    agentLlmTurnsPlanned: n(payload.turnsPlanned),
+    agentLlmLastInputTranscript: s(payload.lastInputTranscript).slice(0, 2_000),
+    agentLlmLastPlannedResponse: s(payload.lastPlannedResponse).slice(0, 2_000),
+    agentLlmLastObservedAt: s(payload.lastObservedAt),
+    agentLlmReasonCode: s(payload.reasonCode),
+  };
+}
+
 function readAgentState(result = {}) {
   const readiness = result?.readiness || {};
   const agentStatus = s(result?.status, "unknown");
@@ -131,6 +156,7 @@ function readAgentState(result = {}) {
       agentStatus === "connected",
     ...readAgentAudioIngestState(result?.audioIngest),
     ...readAgentSttState(result?.stt),
+    ...readAgentLlmState(result?.llm),
   };
 }
 
@@ -175,6 +201,15 @@ export default function usePioneroLiveKitRoom({
   const [agentSttLastTranscript, setAgentSttLastTranscript] = useState("");
   const [agentSttLastObservedAt, setAgentSttLastObservedAt] = useState("");
   const [agentSttReasonCode, setAgentSttReasonCode] = useState("");
+  const [agentLlmProvider, setAgentLlmProvider] = useState("fast_text_llm");
+  const [agentLlmStatus, setAgentLlmStatus] = useState("idle");
+  const [agentLlmEnabled, setAgentLlmEnabled] = useState(false);
+  const [agentLlmNetworkIo, setAgentLlmNetworkIo] = useState(false);
+  const [agentLlmTurnsPlanned, setAgentLlmTurnsPlanned] = useState(0);
+  const [agentLlmLastInputTranscript, setAgentLlmLastInputTranscript] = useState("");
+  const [agentLlmLastPlannedResponse, setAgentLlmLastPlannedResponse] = useState("");
+  const [agentLlmLastObservedAt, setAgentLlmLastObservedAt] = useState("");
+  const [agentLlmReasonCode, setAgentLlmReasonCode] = useState("");
 
   const localMicTrackRef = useRef(null);
   const mountedRef = useRef(false);
@@ -220,6 +255,19 @@ export default function usePioneroLiveKitRoom({
     setAgentSttLastTranscript(s(nextAgentState.agentSttLastTranscript).slice(0, 2_000));
     setAgentSttLastObservedAt(s(nextAgentState.agentSttLastObservedAt));
     setAgentSttReasonCode(s(nextAgentState.agentSttReasonCode));
+    setAgentLlmProvider(s(nextAgentState.agentLlmProvider, "fast_text_llm"));
+    setAgentLlmStatus(s(nextAgentState.agentLlmStatus, "idle"));
+    setAgentLlmEnabled(nextAgentState.agentLlmEnabled === true);
+    setAgentLlmNetworkIo(nextAgentState.agentLlmNetworkIo === true);
+    setAgentLlmTurnsPlanned(n(nextAgentState.agentLlmTurnsPlanned));
+    setAgentLlmLastInputTranscript(
+      s(nextAgentState.agentLlmLastInputTranscript).slice(0, 2_000)
+    );
+    setAgentLlmLastPlannedResponse(
+      s(nextAgentState.agentLlmLastPlannedResponse).slice(0, 2_000)
+    );
+    setAgentLlmLastObservedAt(s(nextAgentState.agentLlmLastObservedAt));
+    setAgentLlmReasonCode(s(nextAgentState.agentLlmReasonCode));
   }, []);
 
   const clearAgentState = useCallback(() => {
@@ -241,6 +289,15 @@ export default function usePioneroLiveKitRoom({
       agentSttLastTranscript: "",
       agentSttLastObservedAt: "",
       agentSttReasonCode: "",
+      agentLlmProvider: "fast_text_llm",
+      agentLlmStatus: "idle",
+      agentLlmEnabled: false,
+      agentLlmNetworkIo: false,
+      agentLlmTurnsPlanned: 0,
+      agentLlmLastInputTranscript: "",
+      agentLlmLastPlannedResponse: "",
+      agentLlmLastObservedAt: "",
+      agentLlmReasonCode: "",
     });
   }, [setSafeAgentState]);
 
@@ -396,6 +453,15 @@ export default function usePioneroLiveKitRoom({
           agentSttLastTranscript: "",
           agentSttLastObservedAt: "",
           agentSttReasonCode: "pionero_agent_start_plan_failed",
+          agentLlmProvider: "fast_text_llm",
+          agentLlmStatus: "error",
+          agentLlmEnabled: false,
+          agentLlmNetworkIo: false,
+          agentLlmTurnsPlanned: 0,
+          agentLlmLastInputTranscript: "",
+          agentLlmLastPlannedResponse: "",
+          agentLlmLastObservedAt: "",
+          agentLlmReasonCode: "pionero_agent_start_plan_failed",
         });
       }
 
@@ -469,5 +535,14 @@ export default function usePioneroLiveKitRoom({
     agentSttLastTranscript,
     agentSttLastObservedAt,
     agentSttReasonCode,
+    agentLlmProvider,
+    agentLlmStatus,
+    agentLlmEnabled,
+    agentLlmNetworkIo,
+    agentLlmTurnsPlanned,
+    agentLlmLastInputTranscript,
+    agentLlmLastPlannedResponse,
+    agentLlmLastObservedAt,
+    agentLlmReasonCode,
   };
 }
