@@ -57,6 +57,20 @@ When enabled, it also requires:
 
 The smoke joins the configured LiveKit room with the Pionero agent runner and immediately stops the runner in cleanup. Roll back by setting either opt-in flag to `0`.
 
+## Live Audio Monitor
+
+Run the bounded live audio monitor with:
+
+```bash
+npm run monitor:pionero-live-audio -w ai-hq-backend
+```
+
+The monitor is double opt-in. It only connects when both `PIONERO_LIVEKIT_LIVE_MONITOR_ENABLED=1` and `PIONERO_LIVEKIT_ROOM_CLIENT_ENABLED=1` are set. It keeps the backend Pionero agent in a LiveKit room for `PIONERO_LIVEKIT_LIVE_MONITOR_SECONDS` seconds, clamped from 1 to 60 seconds, then stops the runner in cleanup.
+
+The default room is `pionero-browser-test`, matching the browser Pionero lane. To verify live browser mic diagnostics, start the monitor, then open BrowserVoiceCall, start the Pionero lane, and publish microphone audio. The monitor reports safe track and frame diagnostics only; it does not prove STT readiness.
+
+Roll back by setting either opt-in flag to `0`.
+
 ## Live Audio Ingest Diagnostics
 
 The Pionero runner reports safe LiveKit audio ingest diagnostics so operators can verify that the backend agent is seeing room events, subscribed microphone tracks, and audio frame counters.
