@@ -59,6 +59,7 @@ function buildPioneroHook(overrides = {}) {
       status: "planned",
     }),
     localMicEnabled: false,
+    monitorOnlyMode: false,
     agentStatus: "idle",
     agentReasonCode: "",
     agentNetworkIo: false,
@@ -201,6 +202,28 @@ describe("BrowserVoiceCall", () => {
     await waitFor(() => {
       expect(getVoiceSpeechGatewayReadiness).toHaveBeenCalledTimes(2);
     });
+  });
+
+  it("shows Pionero monitor-only copy when the hook reports diagnostic mode", () => {
+    const hook = buildHook();
+    const pioneroHook = buildPioneroHook({
+      monitorOnlyMode: true,
+      agentStatus: "monitor_only",
+      agentReasonCode: "pionero_monitor_only_browser_publish",
+    });
+    useBrowserVoiceCall.mockReturnValue(hook);
+    usePioneroLiveKitRoom.mockReturnValue(pioneroHook);
+
+    const { getByText } = render(<BrowserVoiceCall />);
+
+    expect(getByText("Pionero monitor-only mode")).toBeTruthy();
+    expect(
+      getByText(
+        "Pionero monitor-only mode: browser publishes mic without starting backend agent."
+      )
+    ).toBeTruthy();
+    expect(getByText("monitor_only (not ready)")).toBeTruthy();
+    expect(getByText("pionero_monitor_only_browser_publish")).toBeTruthy();
   });
 
   it("uses stop controls when voice lanes are active", () => {

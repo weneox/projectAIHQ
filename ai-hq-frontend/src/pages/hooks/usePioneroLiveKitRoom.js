@@ -19,9 +19,19 @@ const PIONERO_LIVEKIT_SESSION_REQUEST = {
 };
 const SESSION_SECRET_KEYS = new Set([
   "accesstoken",
+  "api_key",
+  "apikey",
+  "api_secret",
+  "apisecret",
+  "audiobase64",
+  "audio_base64",
+  "audiochunk",
+  "audio_chunk",
   "clientsecret",
   "client_secret",
   "jwt",
+  "rawaudio",
+  "raw_audio",
   "token",
 ]);
 const AUDIO_INGEST_STATUSES = new Set([
@@ -62,6 +72,34 @@ function n(value, fallback = 0) {
   }
 
   return Math.floor(numberValue);
+}
+
+function isEnabledFlag(value = "") {
+  return ["1", "true"].includes(s(value).toLowerCase());
+}
+
+export function readPioneroMonitorOnlyMode() {
+  const targetWindow = typeof window === "undefined" ? null : window;
+
+  if (!targetWindow) return false;
+
+  try {
+    const params = new URLSearchParams(targetWindow.location?.search || "");
+
+    if (isEnabledFlag(params.get("pioneroMonitor"))) {
+      return true;
+    }
+  } catch {
+    // Browser diagnostics should stay optional if URL APIs are unavailable.
+  }
+
+  try {
+    return isEnabledFlag(
+      targetWindow.localStorage?.getItem("PIONERO_LIVEKIT_MONITOR_ONLY")
+    );
+  } catch {
+    return false;
+  }
 }
 
 function redactSessionSecrets(value) {
@@ -188,6 +226,46 @@ function readAgentState(result = {}) {
   };
 }
 
+function readMonitorOnlyAgentState() {
+  return {
+    agentStatus: "monitor_only",
+    agentReasonCode: "pionero_monitor_only_browser_publish",
+    agentNetworkIo: false,
+    agentReady: false,
+    agentAudioIngestStatus: "idle",
+    agentAudioFramesObserved: 0,
+    agentAudioBytesObserved: 0,
+    agentAudioLastObservedAt: "",
+    agentAudioReasonCode: "pionero_monitor_only_browser_publish",
+    agentSttProvider: "soniox",
+    agentSttStatus: "idle",
+    agentSttEnabled: false,
+    agentSttNetworkIo: false,
+    agentSttTranscriptsObserved: 0,
+    agentSttLastTranscript: "",
+    agentSttLastObservedAt: "",
+    agentSttReasonCode: "stt_session_not_started",
+    agentLlmProvider: "fast_text_llm",
+    agentLlmStatus: "planned",
+    agentLlmEnabled: false,
+    agentLlmNetworkIo: false,
+    agentLlmTurnsPlanned: 0,
+    agentLlmLastInputTranscript: "",
+    agentLlmLastPlannedResponse: "",
+    agentLlmLastObservedAt: "",
+    agentLlmReasonCode: "llm_not_started",
+    agentTtsProvider: "cartesia",
+    agentTtsStatus: "planned",
+    agentTtsEnabled: false,
+    agentTtsNetworkIo: false,
+    agentTtsSpeechPlansCreated: 0,
+    agentTtsLastInputText: "",
+    agentTtsLastAudioPlan: "",
+    agentTtsLastObservedAt: "",
+    agentTtsReasonCode: "tts_not_started",
+  };
+}
+
 function readErrorMessage(err, fallback = "pionero_livekit_failed", sensitiveValues = []) {
   let message = s(err?.message || err, fallback);
 
@@ -249,9 +327,13 @@ export default function usePioneroLiveKitRoom({
   const [agentTtsLastAudioPlan, setAgentTtsLastAudioPlan] = useState("");
   const [agentTtsLastObservedAt, setAgentTtsLastObservedAt] = useState("");
   const [agentTtsReasonCode, setAgentTtsReasonCode] = useState("");
+  const [monitorOnlyMode, setMonitorOnlyMode] = useState(() =>
+    readPioneroMonitorOnlyMode()
+  );
 
   const localMicTrackRef = useRef(null);
   const runtimeRoomNameRef = useRef("");
+  const shouldStopAgentRuntimeRef = useRef(false);
   const mountedRef = useRef(false);
   const roomListenersRef = useRef(null);
   const roomRef = useRef(null);
@@ -442,7 +524,11 @@ export default function usePioneroLiveKitRoom({
       // Ignore local track stop failures during teardown.
     }
 
-    if (updateState && runtimeRoomName) {
+    if (
+      updateState &&
+      runtimeRoomName &&
+      shouldStopAgentRuntimeRef.current
+    ) {
       try {
         await stopPioneroLiveKitAgentPlan({
           roomName: runtimeRoomName,
@@ -453,6 +539,7 @@ export default function usePioneroLiveKitRoom({
     }
 
     runtimeRoomNameRef.current = "";
+    shouldStopAgentRuntimeRef.current = false;
 
     if (updateState && mountedRef.current) {
       setError("");
@@ -483,6 +570,7 @@ export default function usePioneroLiveKitRoom({
 
     let sensitiveToken = "";
 
+    shouldStopAgentRuntimeRef.current = false;
     setSafeStatus("creating");
 
     if (mountedRef.current) {
@@ -541,7 +629,23 @@ export default function usePioneroLiveKitRoom({
 
       setSafeStatus("live");
 
+      const nextMonitorOnlyMode = readPioneroMonitorOnlyMode();
+
+      if (mountedRef.current) {
+        setMonitorOnlyMode(nextMonitorOnlyMode);
+      }
+
+      if (nextMonitorOnlyMode) {
+        setSafeAgentState(readMonitorOnlyAgentState());
+
+        return {
+          ok: true,
+          status: "live",
+        };
+      }
+
       try {
+        shouldStopAgentRuntimeRef.current = true;
         const agentPlan = await startPioneroLiveKitAgentPlan({
           roomName: nextRoomName,
         });
@@ -644,6 +748,7 @@ export default function usePioneroLiveKitRoom({
     disconnect,
     refreshAgentStatus,
     localMicEnabled,
+    monitorOnlyMode,
     agentStatus,
     agentReasonCode,
     agentNetworkIo,

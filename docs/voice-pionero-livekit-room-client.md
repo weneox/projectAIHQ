@@ -69,6 +69,15 @@ The monitor is double opt-in. It only connects when both `PIONERO_LIVEKIT_LIVE_M
 
 The default room is `pionero-browser-test`, matching the browser Pionero lane. To verify live browser mic diagnostics, start the monitor, then open BrowserVoiceCall, start the Pionero lane, and publish microphone audio. The monitor reports safe track and frame diagnostics only; it does not prove STT readiness.
 
+For browser-side monitor-only verification:
+
+1. Open `/voice-assistant?pioneroMonitor=1`.
+2. Click `Start Pionero realtime call`.
+3. Speak for 5-10 seconds.
+4. Check the monitor output for `observedAudio`, `tracksObserved`, or `framesObserved`.
+
+Monitor-only browser mode publishes the microphone without starting another backend agent runner. It only proves that `rtc-node` receives safe LiveKit track or frame diagnostics, not that STT is ready.
+
 Roll back by setting either opt-in flag to `0`.
 
 ## Live Audio Ingest Diagnostics

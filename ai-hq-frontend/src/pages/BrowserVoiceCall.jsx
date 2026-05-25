@@ -80,6 +80,7 @@ export default function BrowserVoiceCall() {
     disconnect: disconnectPioneroLiveKit,
     refreshAgentStatus: refreshPioneroLiveKitAgentStatus,
     localMicEnabled: pioneroLiveKitLocalMicEnabled,
+    monitorOnlyMode: pioneroLiveKitMonitorOnlyMode,
     agentStatus: pioneroLiveKitAgentStatus,
     agentReasonCode: pioneroLiveKitAgentReasonCode,
     agentNetworkIo: pioneroLiveKitAgentNetworkIo,
@@ -445,6 +446,14 @@ export default function BrowserVoiceCall() {
         <p className="mt-3 text-xs text-text-muted">
           Agent start-plan, ingest skeleton, STT skeleton, LLM turn-plan skeleton, and TTS skeleton only; full AI loop is not running yet.
         </p>
+
+        {pioneroLiveKitMonitorOnlyMode ? (
+          <InlineNotice
+            tone="info"
+            title="Pionero monitor-only mode"
+            description="Pionero monitor-only mode: browser publishes mic without starting backend agent."
+          />
+        ) : null}
 
         <div className="mt-3 grid gap-3 md:grid-cols-3">
           <div className="rounded-2xl border border-line-soft bg-surface-subtle p-3">
