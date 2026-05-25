@@ -72,7 +72,10 @@ function withEnv(env = {}, fn) {
     });
 }
 
-function createVoiceApp({ auth = {} } = {}) {
+function createVoiceApp({
+  auth = {},
+  pioneroLiveKitRoomClassFactory = null,
+} = {}) {
   const app = express();
   app.use(express.json());
 
@@ -93,6 +96,7 @@ function createVoiceApp({ auth = {} } = {}) {
       db: null,
       dbDisabled: true,
       audit: null,
+      pioneroLiveKitRoomClassFactory,
     })
   );
 
@@ -104,6 +108,8 @@ function assertNoSecretLeak(payload = {}, secret = "test-secret-agent") {
 
   assert.equal(serialized.includes(secret), false);
   assert.equal(serialized.includes("apiSecret"), false);
+  assert.equal(serialized.includes("api_secret"), false);
+  assert.equal(serialized.includes('"token"'), false);
   assert.equal(Object.hasOwn(payload, "token"), false);
 }
 
@@ -801,6 +807,129 @@ test("pionero LiveKit agent start-plan route returns planned local state", async
       assertDefaultLlm(body.llm, "planned");
       assertDefaultTts(body.tts, "planned");
       assertNoSecretLeak(body);
+    });
+  });
+});
+
+test("pionero LiveKit agent start-plan route can inject a fake RoomClass seam", async () => {
+  await withEnv(createLiveKitEnv(), async () => {
+    const rooms = [];
+    const factoryCalls = [];
+
+    class FakeRoom {
+      constructor() {
+        this.handlers = new Map();
+        this.connectCalls = [];
+        this.disconnectCalls = 0;
+        rooms.push(this);
+      }
+
+      async connect(url, token) {
+        this.connectCalls.push({ url, token });
+      }
+
+      async disconnect() {
+        this.disconnectCalls += 1;
+      }
+
+      on(eventName, handler) {
+        const handlers = this.handlers.get(eventName) || new Set();
+        handlers.add(handler);
+        this.handlers.set(eventName, handlers);
+        return this;
+      }
+
+      off(eventName, handler) {
+        this.handlers.get(eventName)?.delete(handler);
+        return this;
+      }
+    }
+
+    const app = createVoiceApp({
+      pioneroLiveKitRoomClassFactory({ req, roomName, logger }) {
+        factoryCalls.push({
+          hasReq: Boolean(req),
+          hasLogger: Boolean(logger),
+          roomName,
+        });
+        return FakeRoom;
+      },
+    });
+
+    await withTestServer(app, async (baseUrl) => {
+      const response = await fetch(
+        `${baseUrl}/voice/pionero/livekit/agent/start-plan`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            roomName: "pionero route roomclass seam room",
+          }),
+        }
+      );
+      const body = await response.json();
+      const serialized = JSON.stringify(body);
+
+      assert.equal(response.status, 200);
+      assert.equal(body.ok, true);
+      assert.equal(body.status, "connected");
+      assert.equal(body.networkIo, true);
+      assert.equal(body.readiness.agentParticipantReady, true);
+      assert.equal(body.audioIngest.status, "waiting_for_audio");
+      assert.equal(body.roomName, "pionero-route-roomclass-seam-room");
+      assert.deepEqual(factoryCalls, [
+        {
+          hasReq: true,
+          hasLogger: true,
+          roomName: "pionero route roomclass seam room",
+        },
+      ]);
+      assert.equal(rooms.length, 1);
+      assert.equal(rooms[0].connectCalls.length, 1);
+      assert.equal(rooms[0].connectCalls[0].url, "wss://livekit.example.test");
+      assert.equal(serialized.includes(rooms[0].connectCalls[0].token), false);
+      assertNoSecretLeak(body);
+      assertNoRawAudioLeak(body);
+    });
+  });
+});
+
+test("pionero LiveKit agent start-plan route ignores RoomClass factory failures", async () => {
+  await withEnv(createLiveKitEnv(), async () => {
+    let factoryCalls = 0;
+    const app = createVoiceApp({
+      pioneroLiveKitRoomClassFactory() {
+        factoryCalls += 1;
+        throw new Error("fake room class factory failed");
+      },
+    });
+
+    await withTestServer(app, async (baseUrl) => {
+      const response = await fetch(
+        `${baseUrl}/voice/pionero/livekit/agent/start-plan`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            roomName: "pionero route roomclass factory throws room",
+          }),
+        }
+      );
+      const body = await response.json();
+
+      assert.equal(response.status, 200);
+      assert.equal(body.ok, true);
+      assert.equal(body.status, "planned");
+      assert.equal(body.networkIo, false);
+      assert.equal(body.reasonCode, "livekit_room_client_not_configured");
+      assert.equal(body.roomName, "pionero-route-roomclass-factory-throws-room");
+      assert.equal(factoryCalls, 1);
+      assertNoSecretLeak(body);
+      assertNoRawAudioLeak(body);
     });
   });
 });

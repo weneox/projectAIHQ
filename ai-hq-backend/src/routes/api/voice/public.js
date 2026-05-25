@@ -1876,13 +1876,51 @@ async function handlePioneroLiveKitAgentPlan(req, res) {
   }
 }
 
-async function handlePioneroLiveKitAgentStartPlan(req, res) {
+async function readPioneroLiveKitRouteRoomClass({
+  req,
+  roomName = "",
+  logger = null,
+  pioneroLiveKitRoomClassFactory = null,
+} = {}) {
+  if (typeof pioneroLiveKitRoomClassFactory !== "function") {
+    return null;
+  }
+
+  try {
+    return await pioneroLiveKitRoomClassFactory({
+      req,
+      roomName,
+      logger,
+    }) || null;
+  } catch (err) {
+    logger?.warn?.("voice.pionero.livekit.agent.room_class_factory_failed", {
+      reasonCode: "pionero_livekit_room_class_factory_failed",
+      error: s(err?.message || err),
+    });
+
+    return null;
+  }
+}
+
+async function handlePioneroLiveKitAgentStartPlan(
+  req,
+  res,
+  { pioneroLiveKitRoomClassFactory = null } = {}
+) {
   const logger = getRouteLogger(req, "voice.pionero.livekit.agent.start_plan");
 
   try {
-    const state = await startPioneroLiveKitAgentRuntime({
-      roomName: req.body?.roomName || req.query?.roomName,
+    const roomName = req.body?.roomName || req.query?.roomName;
+    const RoomClass = await readPioneroLiveKitRouteRoomClass({
+      req,
+      roomName,
       logger,
+      pioneroLiveKitRoomClassFactory,
+    });
+    const state = await startPioneroLiveKitAgentRuntime({
+      roomName,
+      logger,
+      ...(RoomClass ? { RoomClass } : {}),
     });
 
     return ok(res, state);
@@ -2318,6 +2356,7 @@ export function voiceRoutes({
   getRuntime = getTenantBrainRuntime,
   startSidebandRunner = startRealtimeSidebandSocketRunner,
   speechGatewayFactory = createVoiceSpeechGateway,
+  pioneroLiveKitRoomClassFactory = null,
 } = {}) {
   const r = express.Router();
 
@@ -2331,7 +2370,9 @@ export function voiceRoutes({
   );
 
   r.post("/voice/pionero/livekit/agent/start-plan", requireOperatorSurfaceAccess, (req, res) =>
-    handlePioneroLiveKitAgentStartPlan(req, res)
+    handlePioneroLiveKitAgentStartPlan(req, res, {
+      pioneroLiveKitRoomClassFactory,
+    })
   );
 
   r.get("/voice/pionero/livekit/agent/status", requireOperatorSurfaceAccess, (req, res) =>
