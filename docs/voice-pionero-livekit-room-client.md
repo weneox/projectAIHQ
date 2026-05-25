@@ -18,6 +18,18 @@ npm run check:pionero-room-client -w ai-hq-backend
 
 Disabled output reports `ok: true`, `available: false`, and `reasonCode: "pionero_livekit_room_client_disabled"`.
 
+## Dependency Proof
+
+Before enabling a real server-side Room client, validate the target module import and export shape:
+
+```bash
+npm run check:pionero-room-client-module -w ai-hq-backend
+```
+
+This check only imports the configured module, resolves a Room class export, and verifies that `connect` and `disconnect` methods are present. It never connects to LiveKit.
+
+The real dependency must be added in a separate PR only after this module-shape check passes in the target environment.
+
 ## Environment
 
 LiveKit token and room planning use:
