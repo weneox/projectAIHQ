@@ -54,6 +54,10 @@ function buildPioneroHook(overrides = {}) {
     participants: [],
     connect: vi.fn(),
     disconnect: vi.fn(),
+    refreshAgentStatus: vi.fn().mockResolvedValue({
+      ok: true,
+      status: "planned",
+    }),
     localMicEnabled: false,
     agentStatus: "idle",
     agentReasonCode: "",
@@ -130,7 +134,7 @@ describe("BrowserVoiceCall", () => {
 
   it("renders GPT Realtime and speech bridge test lanes together", async () => {
     const hook = buildHook();
-    const pioneroHook = buildPioneroHook();
+    const pioneroHook = buildPioneroHook({ roomName: "pionero-browser-test" });
     useBrowserVoiceCall.mockReturnValue(hook);
     usePioneroLiveKitRoom.mockReturnValue(pioneroHook);
 
@@ -176,9 +180,16 @@ describe("BrowserVoiceCall", () => {
     fireEvent.click(getByText("Start GPT Realtime call"));
     expect(hook.startCall).toHaveBeenCalledTimes(1);
 
+    expect(getByText("Refresh Pionero status")).toBeTruthy();
+
     fireEvent.click(getByText("Start Pionero realtime call"));
     expect(pioneroHook.connect).toHaveBeenCalledTimes(1);
     expect(queryByText("token-test")).toBeNull();
+
+    fireEvent.click(getByText("Refresh Pionero status"));
+    await waitFor(() => {
+      expect(pioneroHook.refreshAgentStatus).toHaveBeenCalledTimes(1);
+    });
 
     fireEvent.click(getByText("Start speech bridge recording"));
     expect(hook.speechBridge.startRecording).toHaveBeenCalledTimes(1);
@@ -281,4 +292,5 @@ describe("BrowserVoiceCall", () => {
     expect(hook.speechBridge.stopRecording).toHaveBeenCalledTimes(1);
   });
 });
+
 

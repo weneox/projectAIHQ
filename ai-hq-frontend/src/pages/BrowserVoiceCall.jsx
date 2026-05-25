@@ -78,6 +78,7 @@ export default function BrowserVoiceCall() {
     participants: pioneroLiveKitParticipants = [],
     connect: connectPioneroLiveKit,
     disconnect: disconnectPioneroLiveKit,
+    refreshAgentStatus: refreshPioneroLiveKitAgentStatus,
     localMicEnabled: pioneroLiveKitLocalMicEnabled,
     agentStatus: pioneroLiveKitAgentStatus,
     agentReasonCode: pioneroLiveKitAgentReasonCode,
@@ -120,6 +121,7 @@ export default function BrowserVoiceCall() {
   const [speechReadiness, setSpeechReadiness] = useState(null);
   const [speechReadinessStatus, setSpeechReadinessStatus] = useState("idle");
   const [speechReadinessError, setSpeechReadinessError] = useState("");
+  const [pioneroAgentRefreshStatus, setPioneroAgentRefreshStatus] = useState("idle");
 
   const isLive = status === "live";
   const isBusy = !["idle", "live"].includes(status);
@@ -165,6 +167,7 @@ export default function BrowserVoiceCall() {
     "publishing_microphone",
     "stopping",
   ].includes(pioneroLiveKitStatus);
+  const pioneroAgentRefreshLoading = pioneroAgentRefreshStatus === "loading";
   const pioneroLiveKitLabel = readPioneroLiveKitStatusLabel(pioneroLiveKitStatus);
   const pioneroLiveKitParticipantCount = Array.isArray(pioneroLiveKitParticipants)
     ? pioneroLiveKitParticipants.length
@@ -269,6 +272,17 @@ export default function BrowserVoiceCall() {
       window.clearTimeout(readinessTimer);
     };
   }, [refreshSpeechReadiness]);
+
+  const handleRefreshPioneroAgentStatus = useCallback(async () => {
+    setPioneroAgentRefreshStatus("loading");
+
+    try {
+      await refreshPioneroLiveKitAgentStatus?.();
+      setPioneroAgentRefreshStatus("ready");
+    } catch {
+      setPioneroAgentRefreshStatus("error");
+    }
+  }, [refreshPioneroLiveKitAgentStatus]);
 
   const handleSpeakSpeechBridge = () => {
     speechBridge?.speakText?.(speechBridgeText);
@@ -749,6 +763,15 @@ export default function BrowserVoiceCall() {
               Start Pionero realtime call
             </Button>
           )}
+
+          <Button
+            leftIcon={<RefreshCw className="h-4 w-4" />}
+            disabled={!pioneroLiveKitRoomName || pioneroLiveKitLoading}
+            loading={pioneroAgentRefreshLoading}
+            onClick={handleRefreshPioneroAgentStatus}
+          >
+            Refresh Pionero status
+          </Button>
         </div>
 
         {pioneroLiveKitError ? (
