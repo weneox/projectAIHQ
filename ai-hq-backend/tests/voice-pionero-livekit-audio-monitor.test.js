@@ -77,6 +77,13 @@ function assertDefaultMonitorShape(result = {}, reasonCode = "") {
     eventCounts: {},
     audioIngestStatus: "",
     sttStatus: "",
+    sttFramesBuffered: 0,
+    sttFlushesAttempted: 0,
+    sttFlushesSucceeded: 0,
+    sttFlushesFailed: 0,
+    sttLastFlushReasonCode: "",
+    transcriptsObserved: 0,
+    lastTranscript: "",
     llmStatus: "",
     ttsStatus: "",
   });
@@ -176,6 +183,13 @@ test("pionero live audio monitor reports missing config with booleans only", asy
     eventCounts: {},
     audioIngestStatus: "",
     sttStatus: "",
+    sttFramesBuffered: 0,
+    sttFlushesAttempted: 0,
+    sttFlushesSucceeded: 0,
+    sttFlushesFailed: 0,
+    sttLastFlushReasonCode: "",
+    transcriptsObserved: 0,
+    lastTranscript: "",
     llmStatus: "",
     ttsStatus: "",
     missing: {
@@ -250,6 +264,13 @@ test("pionero live audio monitor connected runner output includes diagnostics", 
             },
             stt: {
               status: "idle",
+              framesBuffered: 0,
+              flushesAttempted: 0,
+              flushesSucceeded: 0,
+              flushesFailed: 0,
+              lastFlushReasonCode: "",
+              transcriptsObserved: 0,
+              lastTranscript: "",
             },
             llm: {
               status: "planned",
@@ -297,7 +318,14 @@ test("pionero live audio monitor connected runner output includes diagnostics", 
               token: "token-secret",
             },
             stt: {
-              status: "idle",
+              status: "transcript_observed",
+              framesBuffered: 0,
+              flushesAttempted: 1,
+              flushesSucceeded: 1,
+              flushesFailed: 0,
+              lastFlushReasonCode: "stt_final_flush",
+              transcriptsObserved: 1,
+              lastTranscript: "Salam Pionero",
             },
             llm: {
               status: "planned",
@@ -354,7 +382,14 @@ test("pionero live audio monitor connected runner output includes diagnostics", 
     audioFrame: 2,
   });
   assert.equal(result.audioIngestStatus, "audio_observed");
-  assert.equal(result.sttStatus, "idle");
+  assert.equal(result.sttStatus, "transcript_observed");
+  assert.equal(result.sttFramesBuffered, 0);
+  assert.equal(result.sttFlushesAttempted, 1);
+  assert.equal(result.sttFlushesSucceeded, 1);
+  assert.equal(result.sttFlushesFailed, 0);
+  assert.equal(result.sttLastFlushReasonCode, "stt_final_flush");
+  assert.equal(result.transcriptsObserved, 1);
+  assert.equal(result.lastTranscript, "Salam Pionero");
   assert.equal(result.llmStatus, "planned");
   assert.equal(result.ttsStatus, "planned");
   assert.deepEqual(waitCalls, [1000, 1000, 1000]);
