@@ -57,7 +57,9 @@ vi.mock("livekit-client", () => ({
   createLocalAudioTrack: mockLiveKit.createLocalAudioTrack,
 }));
 
-import usePioneroLiveKitRoom from "../../../pages/hooks/usePioneroLiveKitRoom.js";
+import usePioneroLiveKitRoom, {
+  readPioneroMonitorOnlyMode,
+} from "../../../pages/hooks/usePioneroLiveKitRoom.js";
 
 function buildSession(overrides = {}) {
   return {
@@ -141,6 +143,8 @@ describe("usePioneroLiveKitRoom", () => {
     mockLiveKit.rooms.length = 0;
     mockLiveKit.Room.mockClear();
     mockLiveKit.createLocalAudioTrack.mockReset();
+    window.history.replaceState({}, "", "/");
+    window.localStorage.clear();
   });
 
   it("creates a Pionero LiveKit session, connects the room, and publishes mic audio", async () => {
@@ -311,6 +315,112 @@ describe("usePioneroLiveKitRoom", () => {
     expect(JSON.stringify(result.current)).not.toContain("tts-raw-audio-secret");
     expect(JSON.stringify(result.current)).not.toContain("tts-agent-token-test");
     expect(JSON.stringify(result.current)).not.toContain("tts-agent-secret-test");
+  });
+
+  it("skips backend agent start-plan in query-enabled monitor-only mode while publishing mic", async () => {
+    window.history.pushState({}, "", "/voice-assistant?pioneroMonitor=1");
+    const localMicTrack = { stop: vi.fn() };
+    const createPioneroLiveKitSession = vi.fn().mockResolvedValue(
+      buildSession({
+        apiSecret: "session-api-secret-test",
+        rawAudio: "session-raw-audio-secret",
+      })
+    );
+    const startPioneroLiveKitAgentPlan = vi
+      .fn()
+      .mockResolvedValue(buildAgentPlan());
+    const stopPioneroLiveKitAgentPlan = vi
+      .fn()
+      .mockResolvedValue(buildAgentPlan({ status: "stopped" }));
+    mockLiveKit.createLocalAudioTrack.mockResolvedValue(localMicTrack);
+
+    const { result } = renderHook(() =>
+      usePioneroLiveKitRoom({
+        createPioneroLiveKitSession,
+        startPioneroLiveKitAgentPlan,
+        stopPioneroLiveKitAgentPlan,
+      })
+    );
+
+    expect(readPioneroMonitorOnlyMode()).toBe(true);
+
+    await act(async () => {
+      await result.current.connect();
+    });
+
+    const room = mockLiveKit.rooms[0];
+    expect(room.connect).toHaveBeenCalledWith(
+      "wss://livekit.example.test",
+      "token-test"
+    );
+    expect(mockLiveKit.createLocalAudioTrack).toHaveBeenCalledTimes(1);
+    expect(room.localParticipant.publishTrack).toHaveBeenCalledWith(localMicTrack);
+    expect(startPioneroLiveKitAgentPlan).not.toHaveBeenCalled();
+    expect(result.current.status).toBe("live");
+    expect(result.current.localMicEnabled).toBe(true);
+    expect(result.current.monitorOnlyMode).toBe(true);
+    expect(result.current.agentStatus).toBe("monitor_only");
+    expect(result.current.agentReasonCode).toBe(
+      "pionero_monitor_only_browser_publish"
+    );
+    expect(result.current.agentNetworkIo).toBe(false);
+    expect(result.current.agentReady).toBe(false);
+    expect(result.current.agentAudioIngestStatus).toBe("idle");
+    expect(result.current.agentSttStatus).toBe("idle");
+    expect(result.current.agentLlmStatus).toBe("planned");
+    expect(result.current.agentTtsStatus).toBe("planned");
+    expect(result.current.session.token).toBeUndefined();
+    expect(result.current.session.apiSecret).toBeUndefined();
+    expect(result.current.session.rawAudio).toBeUndefined();
+    expect(JSON.stringify(result.current.session)).not.toContain("token-test");
+    expect(JSON.stringify(result.current)).not.toContain(
+      "session-api-secret-test"
+    );
+    expect(JSON.stringify(result.current)).not.toContain(
+      "session-raw-audio-secret"
+    );
+
+    await act(async () => {
+      await result.current.disconnect();
+    });
+
+    expect(stopPioneroLiveKitAgentPlan).not.toHaveBeenCalled();
+    expect(room.disconnect).toHaveBeenCalledTimes(1);
+    expect(localMicTrack.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips backend agent start-plan when localStorage enables monitor-only mode", async () => {
+    window.localStorage.setItem("PIONERO_LIVEKIT_MONITOR_ONLY", "true");
+    const localMicTrack = { stop: vi.fn() };
+    const createPioneroLiveKitSession = vi.fn().mockResolvedValue(buildSession());
+    const startPioneroLiveKitAgentPlan = vi
+      .fn()
+      .mockResolvedValue(buildAgentPlan());
+    mockLiveKit.createLocalAudioTrack.mockResolvedValue(localMicTrack);
+
+    const { result } = renderHook(() =>
+      usePioneroLiveKitRoom({
+        createPioneroLiveKitSession,
+        startPioneroLiveKitAgentPlan,
+      })
+    );
+
+    expect(readPioneroMonitorOnlyMode()).toBe(true);
+
+    await act(async () => {
+      await result.current.connect();
+    });
+
+    const room = mockLiveKit.rooms[0];
+    expect(room.connect).toHaveBeenCalledWith(
+      "wss://livekit.example.test",
+      "token-test"
+    );
+    expect(room.localParticipant.publishTrack).toHaveBeenCalledWith(localMicTrack);
+    expect(startPioneroLiveKitAgentPlan).not.toHaveBeenCalled();
+    expect(result.current.status).toBe("live");
+    expect(result.current.monitorOnlyMode).toBe(true);
+    expect(result.current.agentStatus).toBe("monitor_only");
   });
 
   it("uses safe default STT values when the agent start-plan omits STT state", async () => {
