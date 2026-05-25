@@ -83,6 +83,11 @@ export default function BrowserVoiceCall() {
     agentReasonCode: pioneroLiveKitAgentReasonCode,
     agentNetworkIo: pioneroLiveKitAgentNetworkIo,
     agentReady: pioneroLiveKitAgentReady,
+    agentAudioIngestStatus: pioneroLiveKitAgentAudioIngestStatus,
+    agentAudioFramesObserved: pioneroLiveKitAgentAudioFramesObserved,
+    agentAudioBytesObserved: pioneroLiveKitAgentAudioBytesObserved,
+    agentAudioLastObservedAt: pioneroLiveKitAgentAudioLastObservedAt,
+    agentAudioReasonCode: pioneroLiveKitAgentAudioReasonCode,
   } = usePioneroLiveKitRoom();
 
   const [speechBridgeDraftText, setSpeechBridgeDraftText] = useState("");
@@ -148,6 +153,14 @@ export default function BrowserVoiceCall() {
   const pioneroLiveKitAgentNetworkIoLabel = pioneroLiveKitAgentNetworkIo
     ? "yes"
     : "no";
+  const pioneroLiveKitAgentAudioIngestStatusLabel = s(
+    pioneroLiveKitAgentAudioIngestStatus,
+    "idle"
+  );
+  const pioneroLiveKitAgentAudioLastObservedLabel = s(
+    pioneroLiveKitAgentAudioLastObservedAt,
+    "not observed"
+  );
 
   const refreshSpeechReadiness = useCallback(async () => {
     setSpeechReadinessStatus("loading");
@@ -340,7 +353,7 @@ export default function BrowserVoiceCall() {
         </div>
 
         <p className="mt-3 text-xs text-text-muted">
-          Agent start-plan only; full AI loop is not running yet.
+          Agent start-plan and ingest skeleton only; full AI loop is not running yet.
         </p>
 
         <div className="mt-3 grid gap-3 md:grid-cols-3">
@@ -366,6 +379,49 @@ export default function BrowserVoiceCall() {
             </div>
             <div className="mt-1 text-sm font-semibold text-text">
               {pioneroLiveKitAgentNetworkIoLabel}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-3 grid gap-3 md:grid-cols-5">
+          <div className="rounded-2xl border border-line-soft bg-surface-subtle p-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              Audio ingest status
+            </div>
+            <div className="mt-1 text-sm font-semibold text-text">
+              {pioneroLiveKitAgentAudioIngestStatusLabel}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-line-soft bg-surface-subtle p-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              Frames observed
+            </div>
+            <div className="mt-1 text-sm font-semibold text-text">
+              {pioneroLiveKitAgentAudioFramesObserved}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-line-soft bg-surface-subtle p-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              Bytes observed
+            </div>
+            <div className="mt-1 text-sm font-semibold text-text">
+              {pioneroLiveKitAgentAudioBytesObserved}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-line-soft bg-surface-subtle p-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              Last observed
+            </div>
+            <div className="mt-1 text-sm font-semibold text-text">
+              {pioneroLiveKitAgentAudioLastObservedLabel}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-line-soft bg-surface-subtle p-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              Audio reason code
+            </div>
+            <div className="mt-1 text-sm font-semibold text-text">
+              {s(pioneroLiveKitAgentAudioReasonCode, "not requested")}
             </div>
           </div>
         </div>
