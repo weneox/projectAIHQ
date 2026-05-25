@@ -28,6 +28,13 @@ const AUDIO_INGEST_STATUSES = new Set([
   "audio_observed",
   "error",
 ]);
+const STT_STATUSES = new Set([
+  "idle",
+  "waiting_for_audio",
+  "streaming",
+  "transcript_observed",
+  "error",
+]);
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim() || fallback;
@@ -87,6 +94,24 @@ function readAgentAudioIngestState(audioIngest = {}) {
   };
 }
 
+function readAgentSttState(stt = {}) {
+  const payload = stt && typeof stt === "object" && !Array.isArray(stt)
+    ? stt
+    : {};
+  const status = s(payload.status, "idle");
+
+  return {
+    agentSttProvider: s(payload.provider, "soniox"),
+    agentSttStatus: STT_STATUSES.has(status) ? status : "idle",
+    agentSttEnabled: payload.enabled === true,
+    agentSttNetworkIo: payload.networkIo === true,
+    agentSttTranscriptsObserved: n(payload.transcriptsObserved),
+    agentSttLastTranscript: s(payload.lastTranscript).slice(0, 2_000),
+    agentSttLastObservedAt: s(payload.lastObservedAt),
+    agentSttReasonCode: s(payload.reasonCode),
+  };
+}
+
 function readAgentState(result = {}) {
   const readiness = result?.readiness || {};
   const agentStatus = s(result?.status, "unknown");
@@ -105,6 +130,7 @@ function readAgentState(result = {}) {
       readiness?.agentParticipantReady === true ||
       agentStatus === "connected",
     ...readAgentAudioIngestState(result?.audioIngest),
+    ...readAgentSttState(result?.stt),
   };
 }
 
@@ -141,6 +167,14 @@ export default function usePioneroLiveKitRoom({
   const [agentAudioBytesObserved, setAgentAudioBytesObserved] = useState(0);
   const [agentAudioLastObservedAt, setAgentAudioLastObservedAt] = useState("");
   const [agentAudioReasonCode, setAgentAudioReasonCode] = useState("");
+  const [agentSttProvider, setAgentSttProvider] = useState("soniox");
+  const [agentSttStatus, setAgentSttStatus] = useState("idle");
+  const [agentSttEnabled, setAgentSttEnabled] = useState(false);
+  const [agentSttNetworkIo, setAgentSttNetworkIo] = useState(false);
+  const [agentSttTranscriptsObserved, setAgentSttTranscriptsObserved] = useState(0);
+  const [agentSttLastTranscript, setAgentSttLastTranscript] = useState("");
+  const [agentSttLastObservedAt, setAgentSttLastObservedAt] = useState("");
+  const [agentSttReasonCode, setAgentSttReasonCode] = useState("");
 
   const localMicTrackRef = useRef(null);
   const mountedRef = useRef(false);
@@ -178,6 +212,14 @@ export default function usePioneroLiveKitRoom({
     setAgentAudioBytesObserved(n(nextAgentState.agentAudioBytesObserved));
     setAgentAudioLastObservedAt(s(nextAgentState.agentAudioLastObservedAt));
     setAgentAudioReasonCode(s(nextAgentState.agentAudioReasonCode));
+    setAgentSttProvider(s(nextAgentState.agentSttProvider, "soniox"));
+    setAgentSttStatus(s(nextAgentState.agentSttStatus, "idle"));
+    setAgentSttEnabled(nextAgentState.agentSttEnabled === true);
+    setAgentSttNetworkIo(nextAgentState.agentSttNetworkIo === true);
+    setAgentSttTranscriptsObserved(n(nextAgentState.agentSttTranscriptsObserved));
+    setAgentSttLastTranscript(s(nextAgentState.agentSttLastTranscript).slice(0, 2_000));
+    setAgentSttLastObservedAt(s(nextAgentState.agentSttLastObservedAt));
+    setAgentSttReasonCode(s(nextAgentState.agentSttReasonCode));
   }, []);
 
   const clearAgentState = useCallback(() => {
@@ -191,6 +233,14 @@ export default function usePioneroLiveKitRoom({
       agentAudioBytesObserved: 0,
       agentAudioLastObservedAt: "",
       agentAudioReasonCode: "",
+      agentSttProvider: "soniox",
+      agentSttStatus: "idle",
+      agentSttEnabled: false,
+      agentSttNetworkIo: false,
+      agentSttTranscriptsObserved: 0,
+      agentSttLastTranscript: "",
+      agentSttLastObservedAt: "",
+      agentSttReasonCode: "",
     });
   }, [setSafeAgentState]);
 
@@ -338,6 +388,14 @@ export default function usePioneroLiveKitRoom({
           agentAudioBytesObserved: 0,
           agentAudioLastObservedAt: "",
           agentAudioReasonCode: "pionero_agent_start_plan_failed",
+          agentSttProvider: "soniox",
+          agentSttStatus: "error",
+          agentSttEnabled: false,
+          agentSttNetworkIo: false,
+          agentSttTranscriptsObserved: 0,
+          agentSttLastTranscript: "",
+          agentSttLastObservedAt: "",
+          agentSttReasonCode: "pionero_agent_start_plan_failed",
         });
       }
 
@@ -403,5 +461,13 @@ export default function usePioneroLiveKitRoom({
     agentAudioBytesObserved,
     agentAudioLastObservedAt,
     agentAudioReasonCode,
+    agentSttProvider,
+    agentSttStatus,
+    agentSttEnabled,
+    agentSttNetworkIo,
+    agentSttTranscriptsObserved,
+    agentSttLastTranscript,
+    agentSttLastObservedAt,
+    agentSttReasonCode,
   };
 }

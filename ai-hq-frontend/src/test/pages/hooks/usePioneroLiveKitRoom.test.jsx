@@ -96,6 +96,16 @@ function buildAgentPlan(overrides = {}) {
       lastObservedAt: "",
       reasonCode: "livekit_room_client_not_configured",
     },
+    stt: {
+      provider: "soniox",
+      enabled: false,
+      status: "idle",
+      transcriptsObserved: 0,
+      lastTranscript: "",
+      lastObservedAt: "",
+      reasonCode: "stt_session_not_started",
+      networkIo: false,
+    },
     readiness: {
       agentParticipantReady: false,
       reasonCode: "pionero_agent_runner_not_started",
@@ -130,6 +140,19 @@ describe("usePioneroLiveKitRoom", () => {
             reasonCode: "",
             rawAudio: "nested-raw-audio-secret",
             token: "nested-agent-token-test",
+          },
+          stt: {
+            provider: "soniox",
+            enabled: true,
+            status: "transcript_observed",
+            transcriptsObserved: 1,
+            lastTranscript: "Salam Pionero",
+            lastObservedAt: "2026-01-02T03:04:06.000Z",
+            reasonCode: "",
+            networkIo: true,
+            rawAudio: "stt-raw-audio-secret",
+            token: "stt-agent-token-test",
+            apiSecret: "stt-agent-secret-test",
           },
         })
       );
@@ -186,6 +209,16 @@ describe("usePioneroLiveKitRoom", () => {
       "2026-01-02T03:04:05.000Z"
     );
     expect(result.current.agentAudioReasonCode).toBe("");
+    expect(result.current.agentSttProvider).toBe("soniox");
+    expect(result.current.agentSttStatus).toBe("transcript_observed");
+    expect(result.current.agentSttEnabled).toBe(true);
+    expect(result.current.agentSttNetworkIo).toBe(true);
+    expect(result.current.agentSttTranscriptsObserved).toBe(1);
+    expect(result.current.agentSttLastTranscript).toBe("Salam Pionero");
+    expect(result.current.agentSttLastObservedAt).toBe(
+      "2026-01-02T03:04:06.000Z"
+    );
+    expect(result.current.agentSttReasonCode).toBe("");
     expect(result.current.session.token).toBeUndefined();
     expect(JSON.stringify(result.current.session)).not.toContain("token-test");
     expect(JSON.stringify(result.current)).not.toContain("agent-token-test");
@@ -193,6 +226,37 @@ describe("usePioneroLiveKitRoom", () => {
     expect(JSON.stringify(result.current)).not.toContain("raw-audio-secret");
     expect(JSON.stringify(result.current)).not.toContain("nested-raw-audio-secret");
     expect(JSON.stringify(result.current)).not.toContain("nested-agent-token-test");
+    expect(JSON.stringify(result.current)).not.toContain("stt-raw-audio-secret");
+    expect(JSON.stringify(result.current)).not.toContain("stt-agent-token-test");
+    expect(JSON.stringify(result.current)).not.toContain("stt-agent-secret-test");
+  });
+
+  it("uses safe default STT values when the agent start-plan omits STT state", async () => {
+    const createPioneroLiveKitSession = vi.fn().mockResolvedValue(buildSession());
+    const startPioneroLiveKitAgentPlan = vi
+      .fn()
+      .mockResolvedValue(buildAgentPlan({ stt: undefined }));
+    mockLiveKit.createLocalAudioTrack.mockResolvedValue({ stop: vi.fn() });
+
+    const { result } = renderHook(() =>
+      usePioneroLiveKitRoom({
+        createPioneroLiveKitSession,
+        startPioneroLiveKitAgentPlan,
+      })
+    );
+
+    await act(async () => {
+      await result.current.connect();
+    });
+
+    expect(result.current.agentSttProvider).toBe("soniox");
+    expect(result.current.agentSttStatus).toBe("idle");
+    expect(result.current.agentSttEnabled).toBe(false);
+    expect(result.current.agentSttNetworkIo).toBe(false);
+    expect(result.current.agentSttTranscriptsObserved).toBe(0);
+    expect(result.current.agentSttLastTranscript).toBe("");
+    expect(result.current.agentSttLastObservedAt).toBe("");
+    expect(result.current.agentSttReasonCode).toBe("");
   });
 
   it("updates participants from LiveKit room events", async () => {
@@ -276,6 +340,14 @@ describe("usePioneroLiveKitRoom", () => {
     expect(result.current.agentAudioBytesObserved).toBe(0);
     expect(result.current.agentAudioLastObservedAt).toBe("");
     expect(result.current.agentAudioReasonCode).toBe("");
+    expect(result.current.agentSttProvider).toBe("soniox");
+    expect(result.current.agentSttStatus).toBe("idle");
+    expect(result.current.agentSttEnabled).toBe(false);
+    expect(result.current.agentSttNetworkIo).toBe(false);
+    expect(result.current.agentSttTranscriptsObserved).toBe(0);
+    expect(result.current.agentSttLastTranscript).toBe("");
+    expect(result.current.agentSttLastObservedAt).toBe("");
+    expect(result.current.agentSttReasonCode).toBe("");
   });
 
   it("keeps the browser room live when the agent start-plan fails", async () => {
@@ -313,6 +385,16 @@ describe("usePioneroLiveKitRoom", () => {
     expect(result.current.agentAudioBytesObserved).toBe(0);
     expect(result.current.agentAudioLastObservedAt).toBe("");
     expect(result.current.agentAudioReasonCode).toBe(
+      "pionero_agent_start_plan_failed"
+    );
+    expect(result.current.agentSttProvider).toBe("soniox");
+    expect(result.current.agentSttStatus).toBe("error");
+    expect(result.current.agentSttEnabled).toBe(false);
+    expect(result.current.agentSttNetworkIo).toBe(false);
+    expect(result.current.agentSttTranscriptsObserved).toBe(0);
+    expect(result.current.agentSttLastTranscript).toBe("");
+    expect(result.current.agentSttLastObservedAt).toBe("");
+    expect(result.current.agentSttReasonCode).toBe(
       "pionero_agent_start_plan_failed"
     );
   });
