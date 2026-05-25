@@ -57,6 +57,14 @@ When enabled, it also requires:
 
 The smoke joins the configured LiveKit room with the Pionero agent runner and immediately stops the runner in cleanup. Roll back by setting either opt-in flag to `0`.
 
+## Live Audio Ingest Diagnostics
+
+The Pionero runner reports safe LiveKit audio ingest diagnostics so operators can verify that the backend agent is seeing room events, subscribed microphone tracks, and audio frame counters.
+
+Diagnostics are limited to event counts, frame and byte counters, and safe track metadata such as kind and source. They do not include raw audio, base64 audio, chunks, tokens, API credentials, or JWT-like values.
+
+These diagnostics do not prove STT readiness. They only prove the ingest skeleton observed LiveKit room or track activity before a real STT/LLM/TTS loop is enabled.
+
 ## Environment
 
 LiveKit token and room planning use:

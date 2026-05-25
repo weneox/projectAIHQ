@@ -6,6 +6,7 @@ import express from "express";
 import {
   buildPioneroLiveKitAgentRunnerState,
   createPioneroLiveKitAgentRunner,
+  recordPioneroAudioIngestEvent,
   recordPioneroAudioIngestFrame,
   recordPioneroLlmTurnPlan,
   recordPioneroSttTranscript,
@@ -162,6 +163,23 @@ function assertDefaultTts(tts = {}, status = "idle") {
   });
 }
 
+function expectedAudioIngest(overrides = {}) {
+  return {
+    enabled: false,
+    status: "idle",
+    eventCounts: {},
+    lastEventName: "",
+    lastTrackKind: "",
+    lastTrackSource: "",
+    tracksObserved: 0,
+    framesObserved: 0,
+    bytesObserved: 0,
+    lastObservedAt: "",
+    reasonCode: "",
+    ...overrides,
+  };
+}
+
 test("pionero LiveKit agent runner fails safely when config is missing", async () => {
   const runner = createPioneroLiveKitAgentRunner({
     env: createLiveKitEnv({
@@ -182,14 +200,9 @@ test("pionero LiveKit agent runner fails safely when config is missing", async (
   assert.equal(state.networkIo, false);
   assert.equal(state.reasonCode, "livekit_config_missing");
   assert.equal(state.roomName, "pionero-demo-room");
-  assert.deepEqual(state.audioIngest, {
-    enabled: false,
-    status: "idle",
-    framesObserved: 0,
-    bytesObserved: 0,
-    lastObservedAt: "",
+  assert.deepEqual(state.audioIngest, expectedAudioIngest({
     reasonCode: "livekit_config_missing",
-  });
+  }));
   assertDefaultSttIdle(state.stt);
   assertDefaultLlm(state.llm);
   assertNoSecretLeak(state, "test-missing-secret-should-not-leak");
@@ -212,14 +225,9 @@ test("pionero LiveKit agent runner plans without RoomClass and does no network I
   assert.equal(state.url, "wss://livekit.example.test");
   assert.equal(state.roomName, "pionero-demo-room");
   assert.equal(state.agentIdentity, "aihq-pionero-agent");
-  assert.deepEqual(state.audioIngest, {
-    enabled: false,
-    status: "idle",
-    framesObserved: 0,
-    bytesObserved: 0,
-    lastObservedAt: "",
+  assert.deepEqual(state.audioIngest, expectedAudioIngest({
     reasonCode: "livekit_room_client_not_configured",
-  });
+  }));
   assertDefaultSttIdle(state.stt);
   assertDefaultLlm(state.llm, "planned");
   assertNoSecretLeak(state);
@@ -253,16 +261,61 @@ test("pionero audio ingest helper counts frames and never stores raw audio", () 
     }
   );
 
-  assert.deepEqual(state.audioIngest, {
+  assert.deepEqual(state.audioIngest, expectedAudioIngest({
     enabled: true,
     status: "audio_observed",
     framesObserved: 4,
     bytesObserved: 12,
     lastObservedAt: "2026-01-02T03:04:08.000Z",
-    reasonCode: "",
-  });
+  }));
   assertNoRawAudioLeak(state);
   assertNoSecretLeak(state, "test-helper-token-secret");
+});
+
+test("pionero audio ingest event helper stores safe diagnostics only", () => {
+  let state = buildPioneroLiveKitAgentRunnerState({
+    roomName: "pionero-demo-room",
+    status: "connected",
+  });
+
+  state.token = "test-helper-token-secret";
+  state.rawAudio = "raw-audio-secret";
+  state = recordPioneroAudioIngestEvent(state, {
+    eventName: "trackSubscribed",
+    track: {
+      kind: "audio",
+      source: "microphone",
+      token: "track-token-secret",
+      apiSecret: "track-api-secret",
+      rawAudio: "raw-audio-secret",
+      audioChunk: "audio-chunk-secret",
+    },
+  });
+  state = recordPioneroAudioIngestEvent(state, {
+    eventName: "audioFrame",
+    firstArg: {
+      data: "raw-audio-secret",
+      token: "payload-token-secret",
+    },
+  });
+
+  assert.deepEqual(state.audioIngest, expectedAudioIngest({
+    enabled: true,
+    status: "waiting_for_audio",
+    eventCounts: {
+      trackSubscribed: 1,
+      audioFrame: 1,
+    },
+    lastEventName: "audioFrame",
+    lastTrackKind: "audio",
+    lastTrackSource: "microphone",
+    tracksObserved: 1,
+  }));
+  assertNoSecretLeak(state, "test-helper-token-secret");
+  assertNoSecretLeak(state, "track-token-secret");
+  assertNoSecretLeak(state, "track-api-secret");
+  assertNoSecretLeak(state, "payload-token-secret");
+  assertNoRawAudioLeak(state);
 });
 
 test("pionero STT transcript helper stores safe text only", () => {
@@ -469,14 +522,10 @@ test("pionero LiveKit agent runner connects fake RoomClass without exposing toke
   assert.equal(state.status, "connected");
   assert.equal(state.networkIo, true);
   assert.equal(state.reasonCode, "");
-  assert.deepEqual(state.audioIngest, {
+  assert.deepEqual(state.audioIngest, expectedAudioIngest({
     enabled: true,
     status: "waiting_for_audio",
-    framesObserved: 0,
-    bytesObserved: 0,
-    lastObservedAt: "",
-    reasonCode: "",
-  });
+  }));
   assertDefaultSttIdle(state.stt);
   assertDefaultLlm(state.llm, "planned");
   assertNoSecretLeak(state, "test-agent-token-secret");
@@ -551,17 +600,220 @@ test("pionero LiveKit agent runner observes fake room audio events safely", asyn
 
   const state = runner.getState();
 
-  assert.deepEqual(state.audioIngest, {
+  assert.deepEqual(state.audioIngest, expectedAudioIngest({
     enabled: true,
     status: "audio_observed",
+    eventCounts: {
+      testAudioFrame: 1,
+    },
+    lastEventName: "testAudioFrame",
     framesObserved: 1,
     bytesObserved: 7,
     lastObservedAt: "2026-01-02T03:04:05.000Z",
-    reasonCode: "",
-  });
+  }));
   assertDefaultSttIdle(state.stt);
   assertDefaultLlm(state.llm, "planned");
   assertNoSecretLeak(state, "test-agent-token-secret");
+  assertNoRawAudioLeak(state);
+});
+
+test("pionero LiveKit agent runner records trackSubscribed diagnostics for audio tracks", async () => {
+  const rooms = [];
+
+  class FakeAudioTrack {
+    constructor() {
+      this.kind = "audio";
+      this.source = "microphone";
+      this.handlers = new Map();
+      this.rawAudio = "raw-audio-secret";
+      this.token = "track-token-secret";
+    }
+
+    on(eventName, handler) {
+      const handlers = this.handlers.get(eventName) || new Set();
+      handlers.add(handler);
+      this.handlers.set(eventName, handlers);
+      return this;
+    }
+
+    off(eventName, handler) {
+      this.handlers.get(eventName)?.delete(handler);
+      return this;
+    }
+
+    async emit(eventName, ...args) {
+      const results = [];
+      this.handlers.get(eventName)?.forEach((handler) => {
+        results.push(handler(...args));
+      });
+      await Promise.all(results);
+    }
+  }
+
+  class FakeRoom {
+    constructor() {
+      this.handlers = new Map();
+      rooms.push(this);
+    }
+
+    async connect() {}
+
+    on(eventName, handler) {
+      const handlers = this.handlers.get(eventName) || new Set();
+      handlers.add(handler);
+      this.handlers.set(eventName, handlers);
+      return this;
+    }
+
+    off(eventName, handler) {
+      this.handlers.get(eventName)?.delete(handler);
+      return this;
+    }
+
+    async emit(eventName, ...args) {
+      const results = [];
+      this.handlers.get(eventName)?.forEach((handler) => {
+        results.push(handler(...args));
+      });
+      await Promise.all(results);
+    }
+  }
+
+  const runner = createPioneroLiveKitAgentRunner({
+    RoomClass: FakeRoom,
+    RoomEvent: {
+      TrackSubscribed: "trackSubscribed",
+    },
+    createAgentToken: async () => ({
+      provider: "livekit",
+      url: "wss://livekit.example.test",
+      roomName: "pionero-demo-room",
+      agentIdentity: "aihq-pionero-agent",
+      agentName: "AIHQ Pionero Agent",
+      token: "test-agent-token-secret",
+    }),
+    env: createLiveKitEnv(),
+    logger: createTestLogger(),
+    now: () => new Date("2026-01-02T03:04:05.000Z"),
+    roomName: "pionero-demo-room",
+  });
+
+  await runner.start();
+
+  const track = new FakeAudioTrack();
+  await rooms[0].emit("trackSubscribed", track);
+
+  assert.deepEqual(runner.getState().audioIngest, expectedAudioIngest({
+    enabled: true,
+    status: "waiting_for_audio",
+    eventCounts: {
+      trackSubscribed: 1,
+    },
+    lastEventName: "trackSubscribed",
+    lastTrackKind: "audio",
+    lastTrackSource: "microphone",
+    tracksObserved: 1,
+  }));
+
+  await track.emit("audioFrame", Buffer.from([1, 2, 3, 4]));
+
+  const state = runner.getState();
+
+  assert.deepEqual(state.audioIngest, expectedAudioIngest({
+    enabled: true,
+    status: "audio_observed",
+    eventCounts: {
+      trackSubscribed: 1,
+      audioFrame: 1,
+    },
+    lastEventName: "audioFrame",
+    lastTrackKind: "audio",
+    lastTrackSource: "microphone",
+    tracksObserved: 1,
+    framesObserved: 1,
+    bytesObserved: 4,
+    lastObservedAt: "2026-01-02T03:04:05.000Z",
+  }));
+  assertNoSecretLeak(state, "test-agent-token-secret");
+  assertNoSecretLeak(state, "track-token-secret");
+  assertNoRawAudioLeak(state);
+});
+
+test("pionero LiveKit agent runner records non-audio track metadata without counting frames", async () => {
+  const rooms = [];
+
+  class FakeRoom {
+    constructor() {
+      this.handlers = new Map();
+      rooms.push(this);
+    }
+
+    async connect() {}
+
+    on(eventName, handler) {
+      const handlers = this.handlers.get(eventName) || new Set();
+      handlers.add(handler);
+      this.handlers.set(eventName, handlers);
+      return this;
+    }
+
+    off(eventName, handler) {
+      this.handlers.get(eventName)?.delete(handler);
+      return this;
+    }
+
+    async emit(eventName, ...args) {
+      const results = [];
+      this.handlers.get(eventName)?.forEach((handler) => {
+        results.push(handler(...args));
+      });
+      await Promise.all(results);
+    }
+  }
+
+  const runner = createPioneroLiveKitAgentRunner({
+    RoomClass: FakeRoom,
+    RoomEvent: {
+      TrackSubscribed: "trackSubscribed",
+    },
+    createAgentToken: async () => ({
+      provider: "livekit",
+      url: "wss://livekit.example.test",
+      roomName: "pionero-demo-room",
+      agentIdentity: "aihq-pionero-agent",
+      agentName: "AIHQ Pionero Agent",
+      token: "test-agent-token-secret",
+    }),
+    env: createLiveKitEnv(),
+    logger: createTestLogger(),
+    now: () => new Date("2026-01-02T03:04:05.000Z"),
+    roomName: "pionero-demo-room",
+  });
+
+  await runner.start();
+  await rooms[0].emit("trackSubscribed", {
+    kind: "video",
+    source: "camera",
+    byteLength: 123,
+    rawAudio: "raw-audio-secret",
+    token: "video-track-token-secret",
+  });
+
+  const state = runner.getState();
+
+  assert.deepEqual(state.audioIngest, expectedAudioIngest({
+    enabled: true,
+    status: "waiting_for_audio",
+    eventCounts: {
+      trackSubscribed: 1,
+    },
+    lastEventName: "trackSubscribed",
+    lastTrackKind: "video",
+    lastTrackSource: "camera",
+    tracksObserved: 1,
+  }));
+  assertNoSecretLeak(state, "test-agent-token-secret");
+  assertNoSecretLeak(state, "video-track-token-secret");
   assertNoRawAudioLeak(state);
 });
 
@@ -647,14 +899,17 @@ test("pionero LiveKit agent runner streams observed audio into fake STT session"
   assert.equal(sttCalls.length, 1);
   assert.equal(sttCalls[0].audioChunk.byteLength, 7);
   assert.equal(sttCalls[0].finalize, false);
-  assert.deepEqual(state.audioIngest, {
+  assert.deepEqual(state.audioIngest, expectedAudioIngest({
     enabled: true,
     status: "audio_observed",
+    eventCounts: {
+      testAudioFrame: 1,
+    },
+    lastEventName: "testAudioFrame",
     framesObserved: 1,
     bytesObserved: 7,
     lastObservedAt: "2026-01-02T03:04:05.000Z",
-    reasonCode: "",
-  });
+  }));
   assert.deepEqual(state.stt, {
     provider: "soniox",
     enabled: true,
@@ -795,14 +1050,9 @@ test("pionero LiveKit agent start-plan route returns planned local state", async
       assert.equal(body.networkIo, false);
       assert.equal(body.reasonCode, "livekit_room_client_not_configured");
       assert.equal(body.roomName, "pionero-route-room");
-      assert.deepEqual(body.audioIngest, {
-        enabled: false,
-        status: "idle",
-        framesObserved: 0,
-        bytesObserved: 0,
-        lastObservedAt: "",
+      assert.deepEqual(body.audioIngest, expectedAudioIngest({
         reasonCode: "livekit_room_client_not_configured",
-      });
+      }));
       assertDefaultSttIdle(body.stt);
       assertDefaultLlm(body.llm, "planned");
       assertDefaultTts(body.tts, "planned");
