@@ -4,7 +4,7 @@
 
 Pionero uses LiveKit as the future server-side realtime voice transport for the backend agent participant. The RoomClass client is the small runtime seam that will eventually let the backend agent join a LiveKit room, observe subscribed browser audio, and later feed the STT, LLM, and TTS pipeline.
 
-This document covers the operational preflight only. It does not enable a real room client and it does not add the LiveKit Node room dependency.
+This document covers the operational preflight and live smoke checks. It does not enable a real room client by default.
 
 ## Default Behavior
 
@@ -36,6 +36,27 @@ The real dependency must be added in a separate PR only after this module-shape 
 
 Rollback remains the same: set `PIONERO_LIVEKIT_ROOM_CLIENT_ENABLED=0` to return to the no-default-network planned state.
 
+## Live Room Smoke
+
+Run the live room smoke command with:
+
+```bash
+npm run smoke:pionero-live-room -w ai-hq-backend
+```
+
+The command is double opt-in. It skips with `networkIo: false` unless both flags are enabled:
+
+- `PIONERO_LIVEKIT_LIVE_SMOKE_ENABLED=1`
+- `PIONERO_LIVEKIT_ROOM_CLIENT_ENABLED=1`
+
+When enabled, it also requires:
+
+- `LIVEKIT_URL` or `LIVEKIT_WS_URL`
+- `LIVEKIT_API_KEY`
+- `LIVEKIT_API_SECRET`
+
+The smoke joins the configured LiveKit room with the Pionero agent runner and immediately stops the runner in cleanup. Roll back by setting either opt-in flag to `0`.
+
 ## Environment
 
 LiveKit token and room planning use:
@@ -49,7 +70,7 @@ Room client preflight and future RoomClass loading use:
 - `PIONERO_LIVEKIT_ROOM_CLIENT_ENABLED`
 - `PIONERO_LIVEKIT_ROOM_CLIENT_MODULE`
 
-`PIONERO_LIVEKIT_ROOM_CLIENT_MODULE` defaults to `@livekit/rtc-node`, but that dependency is not installed by this step.
+`PIONERO_LIVEKIT_ROOM_CLIENT_MODULE` defaults to `@livekit/rtc-node`.
 
 ## Safe Enable Sequence
 
