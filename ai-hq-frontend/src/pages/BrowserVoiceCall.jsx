@@ -96,6 +96,15 @@ export default function BrowserVoiceCall() {
     agentSttLastTranscript: pioneroLiveKitAgentSttLastTranscript,
     agentSttLastObservedAt: pioneroLiveKitAgentSttLastObservedAt,
     agentSttReasonCode: pioneroLiveKitAgentSttReasonCode,
+    agentLlmProvider: pioneroLiveKitAgentLlmProvider,
+    agentLlmStatus: pioneroLiveKitAgentLlmStatus,
+    agentLlmEnabled: pioneroLiveKitAgentLlmEnabled,
+    agentLlmNetworkIo: pioneroLiveKitAgentLlmNetworkIo,
+    agentLlmTurnsPlanned: pioneroLiveKitAgentLlmTurnsPlanned,
+    agentLlmLastInputTranscript: pioneroLiveKitAgentLlmLastInputTranscript,
+    agentLlmLastPlannedResponse: pioneroLiveKitAgentLlmLastPlannedResponse,
+    agentLlmLastObservedAt: pioneroLiveKitAgentLlmLastObservedAt,
+    agentLlmReasonCode: pioneroLiveKitAgentLlmReasonCode,
   } = usePioneroLiveKitRoom();
 
   const [speechBridgeDraftText, setSpeechBridgeDraftText] = useState("");
@@ -181,6 +190,24 @@ export default function BrowserVoiceCall() {
   );
   const pioneroLiveKitAgentSttLastObservedLabel = s(
     pioneroLiveKitAgentSttLastObservedAt,
+    "not observed"
+  );
+  const pioneroLiveKitAgentLlmEnabledLabel = pioneroLiveKitAgentLlmEnabled
+    ? "yes"
+    : "no";
+  const pioneroLiveKitAgentLlmNetworkIoLabel = pioneroLiveKitAgentLlmNetworkIo
+    ? "yes"
+    : "no";
+  const pioneroLiveKitAgentLlmLastInputTranscriptLabel = s(
+    pioneroLiveKitAgentLlmLastInputTranscript,
+    "not observed"
+  );
+  const pioneroLiveKitAgentLlmLastPlannedResponseLabel = s(
+    pioneroLiveKitAgentLlmLastPlannedResponse,
+    "not planned"
+  );
+  const pioneroLiveKitAgentLlmLastObservedLabel = s(
+    pioneroLiveKitAgentLlmLastObservedAt,
     "not observed"
   );
 
@@ -375,7 +402,7 @@ export default function BrowserVoiceCall() {
         </div>
 
         <p className="mt-3 text-xs text-text-muted">
-          Agent start-plan, ingest skeleton, and STT skeleton only; full AI loop is not running yet.
+          Agent start-plan, ingest skeleton, STT skeleton, and LLM turn-plan skeleton only; full AI loop is not running yet.
         </p>
 
         <div className="mt-3 grid gap-3 md:grid-cols-3">
@@ -515,6 +542,85 @@ export default function BrowserVoiceCall() {
             </div>
             <div className="mt-1 break-words text-sm font-semibold text-text">
               {s(pioneroLiveKitAgentSttReasonCode, "not requested")}
+            </div>
+          </div>
+        </div>
+
+        <p className="mt-3 text-xs font-semibold uppercase tracking-[0.12em] text-text-subtle">
+          LLM turn-plan skeleton
+        </p>
+
+        <div className="mt-2 grid gap-3 md:grid-cols-3">
+          <div className="rounded-2xl border border-line-soft bg-surface-subtle p-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              Provider
+            </div>
+            <div className="mt-1 text-sm font-semibold text-text">
+              {s(pioneroLiveKitAgentLlmProvider, "fast_text_llm")}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-line-soft bg-surface-subtle p-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              Status
+            </div>
+            <div className="mt-1 text-sm font-semibold text-text">
+              {s(pioneroLiveKitAgentLlmStatus, "idle")}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-line-soft bg-surface-subtle p-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              Enabled
+            </div>
+            <div className="mt-1 text-sm font-semibold text-text">
+              {pioneroLiveKitAgentLlmEnabledLabel}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-line-soft bg-surface-subtle p-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              Network IO
+            </div>
+            <div className="mt-1 text-sm font-semibold text-text">
+              {pioneroLiveKitAgentLlmNetworkIoLabel}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-line-soft bg-surface-subtle p-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              Turns planned
+            </div>
+            <div className="mt-1 text-sm font-semibold text-text">
+              {pioneroLiveKitAgentLlmTurnsPlanned}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-line-soft bg-surface-subtle p-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              Last input transcript
+            </div>
+            <div className="mt-1 break-words text-sm font-semibold text-text">
+              {pioneroLiveKitAgentLlmLastInputTranscriptLabel}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-line-soft bg-surface-subtle p-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              Last planned response
+            </div>
+            <div className="mt-1 break-words text-sm font-semibold text-text">
+              {pioneroLiveKitAgentLlmLastPlannedResponseLabel}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-line-soft bg-surface-subtle p-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              Last observed
+            </div>
+            <div className="mt-1 text-sm font-semibold text-text">
+              {pioneroLiveKitAgentLlmLastObservedLabel}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-line-soft bg-surface-subtle p-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              Reason code
+            </div>
+            <div className="mt-1 break-words text-sm font-semibold text-text">
+              {s(pioneroLiveKitAgentLlmReasonCode, "not requested")}
             </div>
           </div>
         </div>

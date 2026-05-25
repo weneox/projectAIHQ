@@ -72,6 +72,15 @@ function buildPioneroHook(overrides = {}) {
     agentSttLastTranscript: "",
     agentSttLastObservedAt: "",
     agentSttReasonCode: "",
+    agentLlmProvider: "fast_text_llm",
+    agentLlmStatus: "idle",
+    agentLlmEnabled: false,
+    agentLlmNetworkIo: false,
+    agentLlmTurnsPlanned: 0,
+    agentLlmLastInputTranscript: "",
+    agentLlmLastPlannedResponse: "",
+    agentLlmLastObservedAt: "",
+    agentLlmReasonCode: "",
     ...overrides,
   };
 }
@@ -121,18 +130,22 @@ describe("BrowserVoiceCall", () => {
     expect(getByText("Three voice lanes")).toBeTruthy();
     expect(getByText("GPT Realtime WebRTC")).toBeTruthy();
     expect(getByText("Pionero LiveKit realtime lane")).toBeTruthy();
-    expect(getByText("Agent start-plan, ingest skeleton, and STT skeleton only; full AI loop is not running yet.")).toBeTruthy();
+    expect(getByText("Agent start-plan, ingest skeleton, STT skeleton, and LLM turn-plan skeleton only; full AI loop is not running yet.")).toBeTruthy();
     expect(getByText("Agent start-plan status")).toBeTruthy();
     expect(getByText("Agent reason code")).toBeTruthy();
     expect(getByText("Agent network IO")).toBeTruthy();
     expect(getByText("Audio ingest status")).toBeTruthy();
     expect(getByText("Frames observed")).toBeTruthy();
     expect(getByText("Bytes observed")).toBeTruthy();
-    expect(getAllByText("Last observed").length).toBeGreaterThanOrEqual(2);
+    expect(getAllByText("Last observed").length).toBeGreaterThanOrEqual(3);
     expect(getByText("Audio reason code")).toBeTruthy();
     expect(getByText("STT skeleton")).toBeTruthy();
     expect(getByText("Transcripts observed")).toBeTruthy();
     expect(getByText("Last transcript")).toBeTruthy();
+    expect(getByText("LLM turn-plan skeleton")).toBeTruthy();
+    expect(getByText("Turns planned")).toBeTruthy();
+    expect(getByText("Last input transcript")).toBeTruthy();
+    expect(getByText("Last planned response")).toBeTruthy();
     expect(getByText("Speech Bridge / Soniox lane")).toBeTruthy();
     expect(getByText("Soniox readiness")).toBeTruthy();
     expect(getByLabelText("Speech bridge text")).toBeTruthy();
@@ -198,6 +211,15 @@ describe("BrowserVoiceCall", () => {
       agentSttLastTranscript: "Salam Pionero",
       agentSttLastObservedAt: "2026-01-02T03:04:06.000Z",
       agentSttReasonCode: "stt_transcript_for_test",
+      agentLlmProvider: "fast_text_llm",
+      agentLlmStatus: "turn_plan_built",
+      agentLlmEnabled: true,
+      agentLlmNetworkIo: false,
+      agentLlmTurnsPlanned: 1,
+      agentLlmLastInputTranscript: "Pionero transcript for turn plan",
+      agentLlmLastPlannedResponse: "Turn plan pending real LLM.",
+      agentLlmLastObservedAt: "2026-01-02T03:04:07.000Z",
+      agentLlmReasonCode: "llm_turn_plan_for_test",
     });
     useBrowserVoiceCall.mockReturnValue(hook);
     usePioneroLiveKitRoom.mockReturnValue(pioneroHook);
@@ -215,6 +237,12 @@ describe("BrowserVoiceCall", () => {
     expect(getByText("Salam Pionero")).toBeTruthy();
     expect(getByText("2026-01-02T03:04:06.000Z")).toBeTruthy();
     expect(getByText("stt_transcript_for_test")).toBeTruthy();
+    expect(getByText("fast_text_llm")).toBeTruthy();
+    expect(getByText("turn_plan_built")).toBeTruthy();
+    expect(getByText("Pionero transcript for turn plan")).toBeTruthy();
+    expect(getByText("Turn plan pending real LLM.")).toBeTruthy();
+    expect(getByText("2026-01-02T03:04:07.000Z")).toBeTruthy();
+    expect(getByText("llm_turn_plan_for_test")).toBeTruthy();
 
     fireEvent.click(getByText("End GPT Realtime call"));
     expect(hook.stopCall).toHaveBeenCalledTimes(1);
