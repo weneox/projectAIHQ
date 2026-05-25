@@ -150,6 +150,10 @@ export async function createPioneroLiveKitSession(body = {}) {
   return apiPost("/api/voice/pionero/livekit/token", body);
 }
 
+export async function startPioneroLiveKitAgentPlan(body = {}) {
+  return apiPost("/api/voice/pionero/livekit/agent/start-plan", body);
+}
+
 export async function getVoiceSpeechGatewayReadiness(params = {}) {
   return apiGet(`/api/voice/speech/gateway/readiness${qs(params)}`);
 }

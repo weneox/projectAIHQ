@@ -55,6 +55,10 @@ function buildPioneroHook(overrides = {}) {
     connect: vi.fn(),
     disconnect: vi.fn(),
     localMicEnabled: false,
+    agentStatus: "idle",
+    agentReasonCode: "",
+    agentNetworkIo: false,
+    agentReady: false,
     ...overrides,
   };
 }
@@ -104,6 +108,10 @@ describe("BrowserVoiceCall", () => {
     expect(getByText("Three voice lanes")).toBeTruthy();
     expect(getByText("GPT Realtime WebRTC")).toBeTruthy();
     expect(getByText("Pionero LiveKit realtime lane")).toBeTruthy();
+    expect(getByText("Agent start-plan only; full AI loop is not running yet.")).toBeTruthy();
+    expect(getByText("Agent start-plan status")).toBeTruthy();
+    expect(getByText("Agent reason code")).toBeTruthy();
+    expect(getByText("Agent network IO")).toBeTruthy();
     expect(getByText("Speech Bridge / Soniox lane")).toBeTruthy();
     expect(getByText("Soniox readiness")).toBeTruthy();
     expect(getByLabelText("Speech bridge text")).toBeTruthy();
@@ -152,11 +160,18 @@ describe("BrowserVoiceCall", () => {
       identity: "user-test",
       participants: [{ identity: "agent-1" }],
       localMicEnabled: true,
+      agentStatus: "planned",
+      agentReasonCode: "livekit_room_client_not_configured",
+      agentNetworkIo: false,
+      agentReady: false,
     });
     useBrowserVoiceCall.mockReturnValue(hook);
     usePioneroLiveKitRoom.mockReturnValue(pioneroHook);
 
     const { getByText } = render(<BrowserVoiceCall />);
+
+    expect(getByText("planned (not ready)")).toBeTruthy();
+    expect(getByText("livekit_room_client_not_configured")).toBeTruthy();
 
     fireEvent.click(getByText("End GPT Realtime call"));
     expect(hook.stopCall).toHaveBeenCalledTimes(1);
