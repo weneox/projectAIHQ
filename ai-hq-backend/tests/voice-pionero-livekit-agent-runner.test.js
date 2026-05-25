@@ -1,4 +1,4 @@
-import test from "node:test";
+﻿import test from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import express from "express";
@@ -108,7 +108,7 @@ test("pionero LiveKit agent runner fails safely when config is missing", async (
       LIVEKIT_URL: "",
       LIVEKIT_WS_URL: "",
       LIVEKIT_API_KEY: "",
-      LIVEKIT_API_SECRET: "missing-secret-should-not-leak",
+      LIVEKIT_API_SECRET: "test-missing-secret-should-not-leak",
     }),
     logger: createTestLogger(),
     roomName: "pionero-demo-room",
@@ -122,7 +122,7 @@ test("pionero LiveKit agent runner fails safely when config is missing", async (
   assert.equal(state.networkIo, false);
   assert.equal(state.reasonCode, "livekit_config_missing");
   assert.equal(state.roomName, "pionero-demo-room");
-  assertNoSecretLeak(state, "missing-secret-should-not-leak");
+  assertNoSecretLeak(state, "test-missing-secret-should-not-leak");
 });
 
 test("pionero LiveKit agent runner plans without RoomClass and does no network IO", async () => {
@@ -171,7 +171,7 @@ test("pionero LiveKit agent runner connects fake RoomClass without exposing toke
     roomName: "pionero-demo-room",
     agentIdentity: "aihq-pionero-agent",
     agentName: "AIHQ Pionero Agent",
-    token: "agent-token-secret",
+    token: "test-agent-token-secret",
     expiresInSeconds: 600,
   });
 
@@ -189,20 +189,20 @@ test("pionero LiveKit agent runner connects fake RoomClass without exposing toke
   assert.deepEqual(rooms[0].connectCalls, [
     {
       url: "wss://livekit.example.test",
-      token: "agent-token-secret",
+      token: "test-agent-token-secret",
     },
   ]);
   assert.equal(state.status, "connected");
   assert.equal(state.networkIo, true);
   assert.equal(state.reasonCode, "");
-  assertNoSecretLeak(state, "agent-token-secret");
+  assertNoSecretLeak(state, "test-agent-token-secret");
 
   const stoppedState = await runner.stop();
 
   assert.equal(rooms[0].disconnectCalls, 1);
   assert.equal(stoppedState.status, "stopped");
   assert.equal(stoppedState.networkIo, false);
-  assertNoSecretLeak(stoppedState, "agent-token-secret");
+  assertNoSecretLeak(stoppedState, "test-agent-token-secret");
 });
 
 test("pionero LiveKit agent start-plan route returns planned local state", async () => {
@@ -260,3 +260,4 @@ test("pionero LiveKit agent start-plan route requires operator access", async ()
     });
   });
 });
+
