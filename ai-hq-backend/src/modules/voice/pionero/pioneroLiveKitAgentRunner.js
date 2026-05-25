@@ -24,6 +24,12 @@ const PIONERO_LLM_STATUSES = new Set([
   "turn_plan_built",
   "error",
 ]);
+const PIONERO_TTS_STATUSES = new Set([
+  "idle",
+  "planned",
+  "speech_plan_built",
+  "error",
+]);
 const DEFAULT_ROOM_AUDIO_EVENT_NAMES = [
   "trackSubscribed",
   "audioFrame",
@@ -167,6 +173,22 @@ function buildPioneroLlmState(input = {}) {
   };
 }
 
+function buildPioneroTtsState(input = {}) {
+  const status = s(input.status, "idle");
+
+  return {
+    provider: "cartesia",
+    enabled: input.enabled === true,
+    status: PIONERO_TTS_STATUSES.has(status) ? status : "idle",
+    speechPlansCreated: n(input.speechPlansCreated),
+    lastInputText: s(input.lastInputText || input.inputText || input.text).slice(0, 2_000),
+    lastAudioPlan: s(input.lastAudioPlan || input.audioPlan).slice(0, 2_000),
+    lastObservedAt: s(input.lastObservedAt),
+    reasonCode: s(input.reasonCode),
+    networkIo: false,
+  };
+}
+
 function buildSafePlan(input = {}) {
   const plan = obj(input.plan);
 
@@ -248,6 +270,22 @@ function readInitialLlm(input = {}, { status } = {}) {
     lastPlannedResponse: "",
     lastObservedAt: "",
     reasonCode: "llm_not_started",
+    networkIo: false,
+  };
+}
+
+function readInitialTts(input = {}, { status } = {}) {
+  if (input.tts) return buildPioneroTtsState(input.tts);
+
+  return {
+    provider: "cartesia",
+    enabled: false,
+    status: ["connected", "planned"].includes(status) ? "planned" : "idle",
+    speechPlansCreated: 0,
+    lastInputText: "",
+    lastAudioPlan: "",
+    lastObservedAt: "",
+    reasonCode: "tts_not_started",
     networkIo: false,
   };
 }
@@ -426,6 +464,46 @@ export function recordPioneroLlmTurnPlan(state = {}, input = {}, options = {}) {
   };
 }
 
+export function recordPioneroTtsPlan(state = {}, input = {}, options = {}) {
+  const safeState = safeStateObject(state);
+  const currentTts = buildPioneroTtsState(safeState.tts);
+  const payload = typeof input === "string" ? { text: input } : obj(input);
+  const inputText = s(
+    payload.text ||
+      payload.responseText ||
+      payload.plannedResponse ||
+      payload.lastPlannedResponse ||
+      payload.inputText
+  ).slice(0, 2_000);
+
+  if (!inputText) {
+    return {
+      ...safeState,
+      tts: currentTts,
+    };
+  }
+
+  return {
+    ...safeState,
+    tts: {
+      provider: "cartesia",
+      enabled: true,
+      status: "speech_plan_built",
+      speechPlansCreated: currentTts.speechPlansCreated + 1,
+      lastInputText: inputText,
+      lastAudioPlan: s(
+        payload.audioPlan || payload.plan || "TTS plan pending real synthesis."
+      ).slice(0, 2_000),
+      lastObservedAt: s(
+        payload.plannedAt || payload.observedAt || payload.createdAt,
+        readNowISOString(options.now)
+      ),
+      reasonCode: "",
+      networkIo: false,
+    },
+  };
+}
+
 export function buildPioneroLiveKitAgentRunnerState(input = {}) {
   const plan = buildSafePlan(input);
   const tokenResult = obj(input.tokenResult);
@@ -451,6 +529,7 @@ export function buildPioneroLiveKitAgentRunnerState(input = {}) {
     audioIngest: readInitialAudioIngest(input, { status, reasonCode }),
     stt: readInitialStt(input),
     llm: readInitialLlm(input, { status }),
+    tts: readInitialTts(input, { status }),
     readiness: {
       ...obj(plan.readiness),
       agentParticipantReady: status === "connected",
@@ -603,6 +682,10 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
             transcript,
             plannedResponse: obj(transcriptResult).plannedResponse,
           }, { now });
+
+          currentState = recordPioneroTtsPlan(currentState, {
+            text: currentState.llm?.lastPlannedResponse,
+          }, { now });
         }
       }
     } catch (err) {
@@ -747,6 +830,7 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
             networkIo: false,
           },
           llm: currentState.llm,
+          tts: currentState.tts,
         });
       }
 
@@ -826,6 +910,13 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
       },
       llm: {
         ...currentState.llm,
+        enabled: false,
+        status: "idle",
+        reasonCode: "pionero_agent_runner_stopped",
+        networkIo: false,
+      },
+      tts: {
+        ...currentState.tts,
         enabled: false,
         status: "idle",
         reasonCode: "pionero_agent_runner_stopped",

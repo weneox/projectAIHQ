@@ -9,6 +9,7 @@ import {
   recordPioneroAudioIngestFrame,
   recordPioneroLlmTurnPlan,
   recordPioneroSttTranscript,
+  recordPioneroTtsPlan,
 } from "../src/modules/voice/pionero/pioneroLiveKitAgentRunner.js";
 import {
   voiceRoutes,
@@ -137,6 +138,20 @@ function assertDefaultLlm(llm = {}, status = "idle") {
     lastPlannedResponse: "",
     lastObservedAt: "",
     reasonCode: "llm_not_started",
+    networkIo: false,
+  });
+}
+
+function assertDefaultTts(tts = {}, status = "idle") {
+  assert.deepEqual(tts, {
+    provider: "cartesia",
+    enabled: false,
+    status,
+    speechPlansCreated: 0,
+    lastInputText: "",
+    lastAudioPlan: "",
+    lastObservedAt: "",
+    reasonCode: "tts_not_started",
     networkIo: false,
   });
 }
@@ -334,6 +349,54 @@ test("pionero LLM turn-plan helper stores safe planned turn only", () => {
   assertNoSecretLeak(state, "test-helper-plain-secret");
   assertNoSecretLeak(state, "test-llm-token-secret");
   assertNoSecretLeak(state, "test-llm-secret");
+  assertNoRawAudioLeak(state);
+});
+
+test("pionero TTS plan helper stores safe speech plan only", () => {
+  let state = buildPioneroLiveKitAgentRunnerState({
+    roomName: "pionero-demo-room",
+    status: "connected",
+  });
+
+  state.token = "test-helper-token-secret";
+  state.secret = "test-helper-plain-secret";
+  state.rawAudio = "raw-audio-secret";
+  state.tts = {
+    ...state.tts,
+    token: "test-tts-token-secret",
+    rawAudio: "raw-audio-secret",
+  };
+
+  state = recordPioneroTtsPlan(
+    state,
+    {
+      text: "Turn plan pending real LLM.",
+      audioPlan: "TTS plan pending real synthesis.",
+      plannedAt: "2026-01-02T03:04:13.000Z",
+      token: "test-tts-token-secret",
+      apiSecret: "test-tts-secret",
+      rawAudio: "raw-audio-secret",
+    },
+    {
+      now: () => new Date("2026-01-02T03:04:14.000Z"),
+    }
+  );
+
+  assert.deepEqual(state.tts, {
+    provider: "cartesia",
+    enabled: true,
+    status: "speech_plan_built",
+    speechPlansCreated: 1,
+    lastInputText: "Turn plan pending real LLM.",
+    lastAudioPlan: "TTS plan pending real synthesis.",
+    lastObservedAt: "2026-01-02T03:04:13.000Z",
+    reasonCode: "",
+    networkIo: false,
+  });
+  assertNoSecretLeak(state, "test-helper-token-secret");
+  assertNoSecretLeak(state, "test-helper-plain-secret");
+  assertNoSecretLeak(state, "test-tts-token-secret");
+  assertNoSecretLeak(state, "test-tts-secret");
   assertNoRawAudioLeak(state);
 });
 
@@ -607,6 +670,17 @@ test("pionero LiveKit agent runner streams observed audio into fake STT session"
     reasonCode: "",
     networkIo: false,
   });
+  assert.deepEqual(state.tts, {
+    provider: "cartesia",
+    enabled: true,
+    status: "speech_plan_built",
+    speechPlansCreated: 1,
+    lastInputText: "Turn plan pending real LLM.",
+    lastAudioPlan: "TTS plan pending real synthesis.",
+    lastObservedAt: "2026-01-02T03:04:05.000Z",
+    reasonCode: "",
+    networkIo: false,
+  });
   assertNoSecretLeak(state, "test-agent-token-secret");
   assertNoSecretLeak(state, "test-stt-token-secret");
   assertNoRawAudioLeak(state);
@@ -725,6 +799,7 @@ test("pionero LiveKit agent start-plan route returns planned local state", async
       });
       assertDefaultSttIdle(body.stt);
       assertDefaultLlm(body.llm, "planned");
+      assertDefaultTts(body.tts, "planned");
       assertNoSecretLeak(body);
     });
   });
