@@ -11,6 +11,13 @@ const PIONERO_AUDIO_INGEST_STATUSES = new Set([
   "audio_observed",
   "error",
 ]);
+const PIONERO_STT_STATUSES = new Set([
+  "idle",
+  "waiting_for_audio",
+  "streaming",
+  "transcript_observed",
+  "error",
+]);
 const DEFAULT_ROOM_AUDIO_EVENT_NAMES = [
   "trackSubscribed",
   "audioFrame",
@@ -120,6 +127,21 @@ function buildPioneroAudioIngestState(input = {}) {
   };
 }
 
+function buildPioneroSttState(input = {}) {
+  const status = s(input.status, "idle");
+
+  return {
+    provider: "soniox",
+    enabled: input.enabled === true,
+    status: PIONERO_STT_STATUSES.has(status) ? status : "idle",
+    transcriptsObserved: n(input.transcriptsObserved),
+    lastTranscript: s(input.lastTranscript).slice(0, 2_000),
+    lastObservedAt: s(input.lastObservedAt),
+    reasonCode: s(input.reasonCode),
+    networkIo: input.networkIo === true,
+  };
+}
+
 function buildSafePlan(input = {}) {
   const plan = obj(input.plan);
 
@@ -167,6 +189,23 @@ function readInitialAudioIngest(input = {}, { status, reasonCode } = {}) {
     bytesObserved: 0,
     lastObservedAt: "",
     reasonCode,
+  };
+}
+
+function readInitialStt(input = {}) {
+  if (input.stt) {
+    return buildPioneroSttState(input.stt);
+  }
+
+  return {
+    provider: "soniox",
+    enabled: false,
+    status: "idle",
+    transcriptsObserved: 0,
+    lastTranscript: "",
+    lastObservedAt: "",
+    reasonCode: "stt_session_not_started",
+    networkIo: false,
   };
 }
 
@@ -227,6 +266,72 @@ export function recordPioneroAudioIngestFrame(state = {}, frame = null, options 
   };
 }
 
+function readTranscriptText(transcriptResult = {}) {
+  if (typeof transcriptResult === "string") {
+    return s(transcriptResult).slice(0, 2_000);
+  }
+
+  const result = obj(transcriptResult);
+
+  return s(
+    result.text ||
+      result.transcript ||
+      result.finalTranscript ||
+      result.interimText
+  ).slice(0, 2_000);
+}
+
+export function recordPioneroSttTranscript(state = {}, transcriptResult = {}, options = {}) {
+  const safeState = safeStateObject(state);
+  const currentStt = buildPioneroSttState(safeState.stt);
+  const result = obj(transcriptResult);
+  const transcript = readTranscriptText(transcriptResult);
+  const reasonCode = s(result.reasonCode);
+  const failed =
+    result.ok === false ||
+    ["blocked", "failed", "error"].includes(s(result.status).toLowerCase());
+
+  if (failed) {
+    return {
+      ...safeState,
+      stt: {
+        ...currentStt,
+        enabled: currentStt.enabled,
+        status: "error",
+        reasonCode: s(reasonCode, "stt_transcript_failed"),
+        networkIo: currentStt.networkIo || result.networkIo === true,
+      },
+    };
+  }
+
+  if (!transcript) {
+    return {
+      ...safeState,
+      stt: {
+        ...currentStt,
+        enabled: true,
+        status: "streaming",
+        reasonCode: s(reasonCode),
+        networkIo: currentStt.networkIo || result.networkIo === true,
+      },
+    };
+  }
+
+  return {
+    ...safeState,
+    stt: {
+      provider: "soniox",
+      enabled: true,
+      status: "transcript_observed",
+      transcriptsObserved: currentStt.transcriptsObserved + 1,
+      lastTranscript: transcript,
+      lastObservedAt: s(result.transcribedAt, readNowISOString(options.now)),
+      reasonCode: "",
+      networkIo: currentStt.networkIo || result.networkIo === true,
+    },
+  };
+}
+
 export function buildPioneroLiveKitAgentRunnerState(input = {}) {
   const plan = buildSafePlan(input);
   const tokenResult = obj(input.tokenResult);
@@ -250,6 +355,7 @@ export function buildPioneroLiveKitAgentRunnerState(input = {}) {
     agentName: s(tokenResult.agentName || plan.agentName),
     pipeline: obj(plan.pipeline),
     audioIngest: readInitialAudioIngest(input, { status, reasonCode }),
+    stt: readInitialStt(input),
     readiness: {
       ...obj(plan.readiness),
       agentParticipantReady: status === "connected",
@@ -270,15 +376,18 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
     RoomClass = null,
     audioIngestEventNames = [],
     createAgentToken = createPioneroLiveKitAgentToken,
+    createSttSession = null,
     env = process.env,
     logger = null,
     now = null,
     roomName = "",
+    speechGatewayFactory = null,
     trackAudioEventNames = [],
   } = input;
 
   let room = null;
   let connected = false;
+  let sttSession = null;
   let currentState = buildPioneroLiveKitAgentRunnerState({
     env,
     roomName,
@@ -287,6 +396,122 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
 
   function updateAudioIngestFrame(frame) {
     currentState = recordPioneroAudioIngestFrame(currentState, frame, { now });
+    return currentState;
+  }
+
+  function setSttState(nextStt = {}) {
+    currentState = {
+      ...safeStateObject(currentState),
+      stt: buildPioneroSttState(nextStt),
+    };
+
+    return currentState;
+  }
+
+  async function createOptionalSttSession() {
+    if (!createSttSession && !speechGatewayFactory) return null;
+
+    try {
+      return createSttSession
+        ? await createSttSession({
+            env,
+            logger,
+            now,
+            roomName,
+          })
+        : await speechGatewayFactory({
+            env,
+            logger,
+            now,
+            roomName,
+          });
+    } catch (err) {
+      logger?.warn?.("pionero.livekit.agent_runner.stt_session_unavailable", {
+        reasonCode: "stt_session_create_failed",
+        error: s(err?.message || err),
+      });
+      setSttState({
+        provider: "soniox",
+        enabled: false,
+        status: "error",
+        reasonCode: "stt_session_create_failed",
+        networkIo: false,
+      });
+
+      return null;
+    }
+  }
+
+  async function callSttSession(frame) {
+    if (!sttSession) return null;
+
+    if (typeof sttSession.pushAudioFrame === "function") {
+      return sttSession.pushAudioFrame(frame);
+    }
+
+    if (typeof sttSession.pushFrame === "function") {
+      return sttSession.pushFrame(frame);
+    }
+
+    if (typeof sttSession.push === "function") {
+      return sttSession.push(frame);
+    }
+
+    if (typeof sttSession.transcribeAudioChunk === "function") {
+      return sttSession.transcribeAudioChunk({
+        audioChunk: frame,
+        finalize: false,
+      });
+    }
+
+    if (typeof sttSession.transcribe === "function") {
+      return sttSession.transcribe({
+        audioChunks: [frame],
+        finalize: false,
+      });
+    }
+
+    return {
+      ok: false,
+      status: "failed",
+      provider: "soniox",
+      stage: "stt",
+      networkIo: false,
+      reasonCode: "stt_session_push_not_supported",
+    };
+  }
+
+  async function observeAudioFrame(frame) {
+    updateAudioIngestFrame(frame);
+
+    if (!sttSession) {
+      return currentState;
+    }
+
+    const currentStt = buildPioneroSttState(currentState.stt);
+    setSttState({
+      ...currentStt,
+      enabled: true,
+      status: "streaming",
+      reasonCode: "",
+    });
+
+    try {
+      const transcriptResult = await callSttSession(frame);
+      currentState = recordPioneroSttTranscript(currentState, transcriptResult, { now });
+    } catch (err) {
+      logger?.warn?.("pionero.livekit.agent_runner.stt_frame_failed", {
+        reasonCode: "stt_session_frame_failed",
+        error: s(err?.message || err),
+      });
+      setSttState({
+        ...currentStt,
+        enabled: true,
+        status: "error",
+        reasonCode: "stt_session_frame_failed",
+      });
+    }
+
     return currentState;
   }
 
@@ -307,8 +532,10 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
         const frame = readFrameCandidate(args);
 
         if (frame) {
-          updateAudioIngestFrame(frame);
+          return observeAudioFrame(frame);
         }
+
+        return undefined;
       });
     });
   }
@@ -324,8 +551,10 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
         const frame = readFrameCandidate(args);
 
         if (frame) {
-          updateAudioIngestFrame(frame);
+          return observeAudioFrame(frame);
         }
+
+        return undefined;
       });
     });
   }
@@ -395,6 +624,25 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
         networkIo: true,
         reasonCode: "",
       });
+      sttSession = await createOptionalSttSession();
+
+      if (sttSession) {
+        currentState = buildPioneroLiveKitAgentRunnerState({
+          plan: currentState,
+          status: "connected",
+          networkIo: true,
+          reasonCode: "",
+          audioIngest: currentState.audioIngest,
+          stt: {
+            provider: "soniox",
+            enabled: true,
+            status: "waiting_for_audio",
+            reasonCode: "",
+            networkIo: false,
+          },
+        });
+      }
+
       attachRoomAudioIngestListeners(room);
 
       return currentState;
@@ -415,6 +663,13 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
           enabled: false,
           status: "error",
           reasonCode: "livekit_room_connect_failed",
+        },
+        stt: {
+          provider: "soniox",
+          enabled: false,
+          status: "idle",
+          reasonCode: "stt_session_not_started",
+          networkIo: false,
         },
       });
 
@@ -445,6 +700,12 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
       reasonCode: "",
       audioIngest: {
         ...currentState.audioIngest,
+        enabled: false,
+        status: "idle",
+        reasonCode: "pionero_agent_runner_stopped",
+      },
+      stt: {
+        ...currentState.stt,
         enabled: false,
         status: "idle",
         reasonCode: "pionero_agent_runner_stopped",
