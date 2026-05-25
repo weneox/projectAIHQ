@@ -100,6 +100,9 @@ function readRoomClient(value = null) {
     return {
       RoomClass: value,
       RoomEvent: value.RoomEvent || null,
+      AudioStream: value.AudioStream || null,
+      TrackKind: value.TrackKind || null,
+      TrackSource: value.TrackSource || null,
     };
   }
 
@@ -111,12 +114,18 @@ function readRoomClient(value = null) {
           ? value.Room
           : null,
       RoomEvent: value.RoomEvent || null,
+      AudioStream: value.AudioStream || null,
+      TrackKind: value.TrackKind || null,
+      TrackSource: value.TrackSource || null,
     };
   }
 
   return {
     RoomClass: null,
     RoomEvent: null,
+    AudioStream: null,
+    TrackKind: null,
+    TrackSource: null,
   };
 }
 
@@ -154,6 +163,10 @@ function buildMonitorResult({
   tracksObserved = 0,
   framesObserved = 0,
   bytesObserved = 0,
+  audioStreamsOpened = 0,
+  audioStreamFramesObserved = 0,
+  audioStreamReadErrors = 0,
+  lastAudioStreamReasonCode = "",
   lastEventName = "",
   lastTrackKind = "",
   lastTrackSource = "",
@@ -191,6 +204,10 @@ function buildMonitorResult({
     tracksObserved: safeTracksObserved,
     framesObserved: safeFramesObserved,
     bytesObserved: n(bytesObserved),
+    audioStreamsOpened: n(audioStreamsOpened),
+    audioStreamFramesObserved: n(audioStreamFramesObserved),
+    audioStreamReadErrors: n(audioStreamReadErrors),
+    lastAudioStreamReasonCode: safeText(lastAudioStreamReasonCode),
     lastEventName: safeText(lastEventName),
     lastTrackKind: safeText(lastTrackKind),
     lastTrackSource: safeText(lastTrackSource),
@@ -235,6 +252,10 @@ function buildResultFromState({
     tracksObserved: audioIngest.tracksObserved,
     framesObserved: audioIngest.framesObserved,
     bytesObserved: audioIngest.bytesObserved,
+    audioStreamsOpened: audioIngest.audioStreamsOpened,
+    audioStreamFramesObserved: audioIngest.audioStreamFramesObserved,
+    audioStreamReadErrors: audioIngest.audioStreamReadErrors,
+    lastAudioStreamReasonCode: audioIngest.lastAudioStreamReasonCode,
     lastEventName: audioIngest.lastEventName,
     lastTrackKind: audioIngest.lastTrackKind,
     lastTrackSource: audioIngest.lastTrackSource,
@@ -322,7 +343,13 @@ export async function runPioneroLiveKitAudioMonitor({
             logger: null,
           });
     const roomClient = readRoomClient(await resolveRoomClass({ roomName }));
-    const { RoomClass, RoomEvent } = roomClient;
+    const {
+      RoomClass,
+      RoomEvent,
+      AudioStream,
+      TrackKind,
+      TrackSource,
+    } = roomClient;
 
     if (typeof RoomClass !== "function") {
       return buildMonitorResult({
@@ -338,6 +365,9 @@ export async function runPioneroLiveKitAudioMonitor({
     const runner = createRunner({
       RoomClass,
       ...(RoomEvent ? { RoomEvent } : {}),
+      ...(AudioStream ? { AudioStream } : {}),
+      ...(TrackKind ? { TrackKind } : {}),
+      ...(TrackSource ? { TrackSource } : {}),
       env,
       logger: null,
       now,

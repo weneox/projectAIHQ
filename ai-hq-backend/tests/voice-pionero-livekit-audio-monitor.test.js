@@ -67,6 +67,10 @@ function assertDefaultMonitorShape(result = {}, reasonCode = "") {
     tracksObserved: 0,
     framesObserved: 0,
     bytesObserved: 0,
+    audioStreamsOpened: 0,
+    audioStreamFramesObserved: 0,
+    audioStreamReadErrors: 0,
+    lastAudioStreamReasonCode: "",
     lastEventName: "",
     lastTrackKind: "",
     lastTrackSource: "",
@@ -162,6 +166,10 @@ test("pionero live audio monitor reports missing config with booleans only", asy
     tracksObserved: 0,
     framesObserved: 0,
     bytesObserved: 0,
+    audioStreamsOpened: 0,
+    audioStreamFramesObserved: 0,
+    audioStreamReadErrors: 0,
+    lastAudioStreamReasonCode: "",
     lastEventName: "",
     lastTrackKind: "",
     lastTrackSource: "",
@@ -182,6 +190,20 @@ test("pionero live audio monitor reports missing config with booleans only", asy
 
 test("pionero live audio monitor connected runner output includes diagnostics", async () => {
   class FakeRoom {}
+  class FakeAudioStream {}
+  const FakeRoomEvent = {
+    TrackSubscribed: "trackSubscribed",
+  };
+  const FakeTrackKind = {
+    KIND_AUDIO: 1,
+  };
+  const FakeTrackSource = {
+    SOURCE_MICROPHONE: 2,
+  };
+  FakeRoom.RoomEvent = FakeRoomEvent;
+  FakeRoom.AudioStream = FakeAudioStream;
+  FakeRoom.TrackKind = FakeTrackKind;
+  FakeRoom.TrackSource = FakeTrackSource;
 
   const waitCalls = [];
   let snapshotCalls = 0;
@@ -200,8 +222,19 @@ test("pionero live audio monitor connected runner output includes diagnostics", 
       assert.equal(roomName, "pionero-browser-test");
       return FakeRoom;
     },
-    createRunner: ({ RoomClass, roomName }) => {
+    createRunner: ({
+      AudioStream,
+      RoomClass,
+      RoomEvent,
+      TrackKind,
+      TrackSource,
+      roomName,
+    }) => {
       assert.equal(RoomClass, FakeRoom);
+      assert.equal(RoomEvent, FakeRoomEvent);
+      assert.equal(AudioStream, FakeAudioStream);
+      assert.equal(TrackKind, FakeTrackKind);
+      assert.equal(TrackSource, FakeTrackSource);
       assert.equal(roomName, "pionero-browser-test");
 
       return {
@@ -248,6 +281,10 @@ test("pionero live audio monitor connected runner output includes diagnostics", 
               tracksObserved: 1,
               framesObserved: 2,
               bytesObserved: 9,
+              audioStreamsOpened: 1,
+              audioStreamFramesObserved: 2,
+              audioStreamReadErrors: 0,
+              lastAudioStreamReasonCode: "audio_stream_frame_observed",
               lastEventName: "audioFrame",
               lastTrackKind: "audio",
               lastTrackSource: "microphone",
@@ -305,6 +342,10 @@ test("pionero live audio monitor connected runner output includes diagnostics", 
   assert.equal(result.tracksObserved, 1);
   assert.equal(result.framesObserved, 2);
   assert.equal(result.bytesObserved, 9);
+  assert.equal(result.audioStreamsOpened, 1);
+  assert.equal(result.audioStreamFramesObserved, 2);
+  assert.equal(result.audioStreamReadErrors, 0);
+  assert.equal(result.lastAudioStreamReasonCode, "audio_stream_frame_observed");
   assert.equal(result.lastEventName, "audioFrame");
   assert.equal(result.lastTrackKind, "audio");
   assert.equal(result.lastTrackSource, "microphone");

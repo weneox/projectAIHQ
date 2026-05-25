@@ -78,6 +78,9 @@ function readRoomClient(value = null) {
     return {
       RoomClass: value,
       RoomEvent: value.RoomEvent || null,
+      AudioStream: value.AudioStream || null,
+      TrackKind: value.TrackKind || null,
+      TrackSource: value.TrackSource || null,
     };
   }
 
@@ -89,12 +92,18 @@ function readRoomClient(value = null) {
           ? value.Room
           : null,
       RoomEvent: value.RoomEvent || null,
+      AudioStream: value.AudioStream || null,
+      TrackKind: value.TrackKind || null,
+      TrackSource: value.TrackSource || null,
     };
   }
 
   return {
     RoomClass: null,
     RoomEvent: null,
+    AudioStream: null,
+    TrackKind: null,
+    TrackSource: null,
   };
 }
 
@@ -193,7 +202,13 @@ export async function runPioneroLiveKitLiveRoomSmoke({
             logger: null,
           });
     const roomClient = readRoomClient(await resolveRoomClass({ roomName }));
-    const { RoomClass, RoomEvent } = roomClient;
+    const {
+      RoomClass,
+      RoomEvent,
+      AudioStream,
+      TrackKind,
+      TrackSource,
+    } = roomClient;
 
     if (typeof RoomClass !== "function") {
       return buildSmokeResult({
@@ -208,6 +223,9 @@ export async function runPioneroLiveKitLiveRoomSmoke({
     const runner = createRunner({
       RoomClass,
       ...(RoomEvent ? { RoomEvent } : {}),
+      ...(AudioStream ? { AudioStream } : {}),
+      ...(TrackKind ? { TrackKind } : {}),
+      ...(TrackSource ? { TrackSource } : {}),
       env,
       logger: null,
       now,

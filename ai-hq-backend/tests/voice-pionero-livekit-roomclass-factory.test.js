@@ -63,8 +63,15 @@ test("pionero LiveKit RoomClass factory returns null when disabled", async () =>
 
 test("pionero LiveKit RoomClass factory imports module Room shape", async () => {
   class FakeRoom {}
+  class FakeAudioStream {}
   const FakeRoomEvent = {
     TrackSubscribed: "trackSubscribed",
+  };
+  const FakeTrackKind = {
+    KIND_AUDIO: 1,
+  };
+  const FakeTrackSource = {
+    SOURCE_MICROPHONE: 2,
   };
 
   const imports = [];
@@ -75,7 +82,13 @@ test("pionero LiveKit RoomClass factory imports module Room shape", async () => 
     },
     importer: async (moduleName) => {
       imports.push(moduleName);
-      return { Room: FakeRoom, RoomEvent: FakeRoomEvent };
+      return {
+        AudioStream: FakeAudioStream,
+        Room: FakeRoom,
+        RoomEvent: FakeRoomEvent,
+        TrackKind: FakeTrackKind,
+        TrackSource: FakeTrackSource,
+      };
     },
   });
 
@@ -84,13 +97,23 @@ test("pionero LiveKit RoomClass factory imports module Room shape", async () => 
   assert.equal(RoomClass, FakeRoom);
   assert.equal(RoomClass.RoomClass, FakeRoom);
   assert.equal(RoomClass.RoomEvent, FakeRoomEvent);
+  assert.equal(RoomClass.AudioStream, FakeAudioStream);
+  assert.equal(RoomClass.TrackKind, FakeTrackKind);
+  assert.equal(RoomClass.TrackSource, FakeTrackSource);
   assert.deepEqual(imports, ["fake-livekit-room-client"]);
 });
 
 test("pionero LiveKit RoomClass factory supports default Room shape", async () => {
   class FakeRoom {}
+  class FakeAudioStream {}
   const FakeRoomEvent = {
     TrackPublished: "trackPublished",
+  };
+  const FakeTrackKind = {
+    KIND_AUDIO: 1,
+  };
+  const FakeTrackSource = {
+    SOURCE_MICROPHONE: 2,
   };
 
   const factory = createPioneroLiveKitRoomClassFactory({
@@ -99,7 +122,15 @@ test("pionero LiveKit RoomClass factory supports default Room shape", async () =
     },
     importer: async (moduleName) => {
       assert.equal(moduleName, "@livekit/rtc-node");
-      return { default: { Room: FakeRoom, RoomEvent: FakeRoomEvent } };
+      return {
+        default: {
+          AudioStream: FakeAudioStream,
+          Room: FakeRoom,
+          RoomEvent: FakeRoomEvent,
+          TrackKind: FakeTrackKind,
+          TrackSource: FakeTrackSource,
+        },
+      };
     },
   });
 
@@ -107,6 +138,9 @@ test("pionero LiveKit RoomClass factory supports default Room shape", async () =
 
   assert.equal(RoomClass, FakeRoom);
   assert.equal(RoomClass.RoomEvent, FakeRoomEvent);
+  assert.equal(RoomClass.AudioStream, FakeAudioStream);
+  assert.equal(RoomClass.TrackKind, FakeTrackKind);
+  assert.equal(RoomClass.TrackSource, FakeTrackSource);
 });
 
 test("pionero LiveKit RoomClass factory supports default function shape", async () => {
