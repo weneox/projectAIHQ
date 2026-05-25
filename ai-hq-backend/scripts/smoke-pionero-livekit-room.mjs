@@ -29,6 +29,16 @@ function isEnabled(value = "") {
   return ["1", "true"].includes(s(value).toLowerCase());
 }
 
+function n(value, fallback = 0) {
+  const numericValue = Number(value);
+
+  if (!Number.isFinite(numericValue) || numericValue < 0) {
+    return fallback;
+  }
+
+  return Math.floor(numericValue);
+}
+
 function safeText(value = "") {
   const normalized = s(value);
   const lowered = normalized.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -73,6 +83,12 @@ function buildSmokeResult({
   agentIdentity = "",
   reasonCode = "",
   audioIngestStatus = "",
+  tracksObserved = 0,
+  framesObserved = 0,
+  bytesObserved = 0,
+  lastEventName = "",
+  lastTrackKind = "",
+  lastTrackSource = "",
   sttStatus = "",
   llmStatus = "",
   ttsStatus = "",
@@ -89,6 +105,12 @@ function buildSmokeResult({
     agentIdentity: safeText(agentIdentity),
     reasonCode: safeText(reasonCode),
     audioIngestStatus: safeText(audioIngestStatus),
+    tracksObserved: n(tracksObserved),
+    framesObserved: n(framesObserved),
+    bytesObserved: n(bytesObserved),
+    lastEventName: safeText(lastEventName),
+    lastTrackKind: safeText(lastTrackKind),
+    lastTrackSource: safeText(lastTrackSource),
     sttStatus: safeText(sttStatus),
     llmStatus: safeText(llmStatus),
     ttsStatus: safeText(ttsStatus),
@@ -183,6 +205,12 @@ export async function runPioneroLiveKitLiveRoomSmoke({
       agentIdentity: startState?.agentIdentity,
       reasonCode: startState?.reasonCode,
       audioIngestStatus: startState?.audioIngest?.status,
+      tracksObserved: startState?.audioIngest?.tracksObserved,
+      framesObserved: startState?.audioIngest?.framesObserved,
+      bytesObserved: startState?.audioIngest?.bytesObserved,
+      lastEventName: startState?.audioIngest?.lastEventName,
+      lastTrackKind: startState?.audioIngest?.lastTrackKind,
+      lastTrackSource: startState?.audioIngest?.lastTrackSource,
       sttStatus: startState?.stt?.status,
       llmStatus: startState?.llm?.status,
       ttsStatus: startState?.tts?.status,

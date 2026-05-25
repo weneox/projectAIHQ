@@ -42,6 +42,17 @@ const DEFAULT_TRACK_AUDIO_EVENT_NAMES = [
   "audioData",
   "data",
 ];
+const SAFE_DIAGNOSTIC_TEXT_MAX_LENGTH = 96;
+const UNSAFE_DIAGNOSTIC_TEXT_PATTERNS = [
+  "token",
+  "secret",
+  "rawaudio",
+  "audiobase64",
+  "audiochunk",
+  "apikey",
+  "apisecret",
+  "jwt",
+];
 const UNSAFE_RUNNER_STATE_KEYS = new Set([
   "api_secret",
   "api_key",
@@ -90,6 +101,57 @@ function n(value, fallback = 0) {
   return Math.floor(numericValue);
 }
 
+function normalizeSafeDiagnosticText(
+  value = "",
+  {
+    fallback = "",
+    maxLength = SAFE_DIAGNOSTIC_TEXT_MAX_LENGTH,
+    lower = false,
+  } = {}
+) {
+  const cleaned = s(value, fallback)
+    .replace(/[^a-zA-Z0-9_.:-]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, maxLength);
+  const normalized = lower ? cleaned.toLowerCase() : cleaned;
+  const folded = normalized.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+  if (
+    UNSAFE_DIAGNOSTIC_TEXT_PATTERNS.some((pattern) =>
+      folded.includes(pattern)
+    )
+  ) {
+    return "[redacted]";
+  }
+
+  return normalized || fallback;
+}
+
+function normalizePioneroAudioIngestEventName(value = "") {
+  return normalizeSafeDiagnosticText(value, {
+    fallback: "unknown_event",
+  });
+}
+
+function normalizePioneroTrackDiagnostic(value = "") {
+  return normalizeSafeDiagnosticText(value, {
+    fallback: "",
+    maxLength: 48,
+    lower: true,
+  });
+}
+
+function buildPioneroAudioEventCounts(value = {}) {
+  return Object.fromEntries(
+    Object.entries(obj(value))
+      .map(([eventName, count]) => [
+        normalizePioneroAudioIngestEventName(eventName),
+        n(count),
+      ])
+      .filter(([eventName, count]) => eventName && count > 0)
+  );
+}
+
 function readNowISOString(now = null) {
   const value = typeof now === "function" ? now() : new Date();
   const date = value instanceof Date ? value : new Date(value);
@@ -135,6 +197,15 @@ function buildPioneroAudioIngestState(input = {}) {
   return {
     enabled: input.enabled === true,
     status: PIONERO_AUDIO_INGEST_STATUSES.has(status) ? status : "idle",
+    eventCounts: buildPioneroAudioEventCounts(input.eventCounts),
+    lastEventName: normalizePioneroAudioIngestEventName(
+      input.lastEventName
+    ) === "unknown_event"
+      ? ""
+      : normalizePioneroAudioIngestEventName(input.lastEventName),
+    lastTrackKind: normalizePioneroTrackDiagnostic(input.lastTrackKind),
+    lastTrackSource: normalizePioneroTrackDiagnostic(input.lastTrackSource),
+    tracksObserved: n(input.tracksObserved),
     framesObserved: n(input.framesObserved),
     bytesObserved: n(input.bytesObserved),
     lastObservedAt: s(input.lastObservedAt),
@@ -211,6 +282,11 @@ function readInitialAudioIngest(input = {}, { status, reasonCode } = {}) {
     return {
       enabled: true,
       status: "waiting_for_audio",
+      eventCounts: {},
+      lastEventName: "",
+      lastTrackKind: "",
+      lastTrackSource: "",
+      tracksObserved: 0,
       framesObserved: 0,
       bytesObserved: 0,
       lastObservedAt: "",
@@ -222,6 +298,11 @@ function readInitialAudioIngest(input = {}, { status, reasonCode } = {}) {
     return {
       enabled: false,
       status: "error",
+      eventCounts: {},
+      lastEventName: "",
+      lastTrackKind: "",
+      lastTrackSource: "",
+      tracksObserved: 0,
       framesObserved: 0,
       bytesObserved: 0,
       lastObservedAt: "",
@@ -232,6 +313,11 @@ function readInitialAudioIngest(input = {}, { status, reasonCode } = {}) {
   return {
     enabled: false,
     status: "idle",
+    eventCounts: {},
+    lastEventName: "",
+    lastTrackKind: "",
+    lastTrackSource: "",
+    tracksObserved: 0,
     framesObserved: 0,
     bytesObserved: 0,
     lastObservedAt: "",
@@ -297,10 +383,49 @@ function isAudioTrack(track = {}) {
   return kind === "audio" || source === "microphone" || source === "audio";
 }
 
+function readTrackDiagnosticCandidate(value = {}) {
+  const candidate = obj(value);
+
+  if (!candidate || Object.keys(candidate).length === 0) return {};
+
+  const nestedTrack = obj(candidate.track);
+  const mediaStreamTrack = obj(candidate.mediaStreamTrack);
+  const kind = s(
+    candidate.kind ||
+      candidate.trackKind ||
+      candidate.type ||
+      mediaStreamTrack.kind ||
+      nestedTrack.kind ||
+      nestedTrack.mediaStreamTrack?.kind
+  );
+  const source = s(
+    candidate.source ||
+      candidate.trackSource ||
+      mediaStreamTrack.source ||
+      nestedTrack.source ||
+      nestedTrack.mediaStreamTrack?.source
+  );
+  const looksLikeTrack = Boolean(
+    kind ||
+      source ||
+      candidate.mediaStreamTrack ||
+      candidate.track ||
+      candidate.sid ||
+      candidate.trackSid
+  );
+
+  return {
+    looksLikeTrack,
+    kind: normalizePioneroTrackDiagnostic(kind),
+    source: normalizePioneroTrackDiagnostic(source),
+  };
+}
+
 function readFrameCandidate(values = []) {
   for (const value of values) {
     if (value === null || value === undefined) continue;
     if (typeof value === "string") return value;
+    if (readTrackDiagnosticCandidate(value).looksLikeTrack) continue;
     if (typeof value?.byteLength === "number") return value;
     if (ArrayBuffer.isView(value) || value instanceof ArrayBuffer) return value;
 
@@ -337,12 +462,45 @@ export function recordPioneroAudioIngestFrame(state = {}, frame = null, options 
   return {
     ...safeState,
     audioIngest: {
+      ...currentAudioIngest,
       enabled: true,
       status: "audio_observed",
       framesObserved: currentAudioIngest.framesObserved + 1,
       bytesObserved: currentAudioIngest.bytesObserved + bytesObserved,
       lastObservedAt: readNowISOString(options.now),
       reasonCode: "",
+    },
+  };
+}
+
+export function recordPioneroAudioIngestEvent(state = {}, input = {}, options = {}) {
+  const safeState = safeStateObject(state);
+  const currentAudioIngest = buildPioneroAudioIngestState(safeState.audioIngest);
+  const payload = typeof input === "string" ? { eventName: input } : obj(input);
+  const eventName = normalizePioneroAudioIngestEventName(
+    payload.eventName || payload.name || options.eventName
+  );
+  const trackDiagnostics = readTrackDiagnosticCandidate(
+    payload.track ||
+      payload.publication ||
+      payload.trackPublication ||
+      payload.firstArg
+  );
+
+  return {
+    ...safeState,
+    audioIngest: {
+      ...currentAudioIngest,
+      eventCounts: {
+        ...currentAudioIngest.eventCounts,
+        [eventName]: n(currentAudioIngest.eventCounts[eventName]) + 1,
+      },
+      lastEventName: eventName,
+      lastTrackKind: trackDiagnostics.kind || currentAudioIngest.lastTrackKind,
+      lastTrackSource:
+        trackDiagnostics.source || currentAudioIngest.lastTrackSource,
+      tracksObserved: currentAudioIngest.tracksObserved +
+        (trackDiagnostics.looksLikeTrack ? 1 : 0),
     },
   };
 }
@@ -718,6 +876,9 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
 
     readTrackAudioEventNames({ trackAudioEventNames }).forEach((eventName) => {
       addEventListener(track, eventName, (...args) => {
+        currentState = recordPioneroAudioIngestEvent(currentState, {
+          eventName,
+        });
         const frame = readFrameCandidate(args);
 
         if (frame) {
@@ -735,6 +896,10 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
       audioIngestEventNames,
     }).forEach((eventName) => {
       addEventListener(targetRoom, eventName, (...args) => {
+        currentState = recordPioneroAudioIngestEvent(currentState, {
+          eventName,
+          firstArg: args[0],
+        });
         attachTrackAudioListeners(args[0]);
 
         const frame = readFrameCandidate(args);
