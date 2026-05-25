@@ -245,7 +245,9 @@ describe("usePioneroLiveKitRoom", () => {
       startPioneroLiveKitAgentPlan.mock.invocationCallOrder[0]
     );
     expect(mockLiveKit.createLocalAudioTrack).toHaveBeenCalledTimes(1);
-    expect(room.localParticipant.publishTrack).toHaveBeenCalledWith(localMicTrack);
+    expect(room.localParticipant.publishTrack).toHaveBeenCalledWith(localMicTrack, {
+      source: "microphone",
+    });
     expect(result.current.status).toBe("live");
     expect(result.current.roomName).toBe("pionero-browser-test");
     expect(result.current.identity).toBe("user-test");
@@ -354,7 +356,9 @@ describe("usePioneroLiveKitRoom", () => {
       "token-test"
     );
     expect(mockLiveKit.createLocalAudioTrack).toHaveBeenCalledTimes(1);
-    expect(room.localParticipant.publishTrack).toHaveBeenCalledWith(localMicTrack);
+    expect(room.localParticipant.publishTrack).toHaveBeenCalledWith(localMicTrack, {
+      source: "microphone",
+    });
     expect(startPioneroLiveKitAgentPlan).not.toHaveBeenCalled();
     expect(result.current.status).toBe("live");
     expect(result.current.localMicEnabled).toBe(true);
@@ -416,7 +420,9 @@ describe("usePioneroLiveKitRoom", () => {
       "wss://livekit.example.test",
       "token-test"
     );
-    expect(room.localParticipant.publishTrack).toHaveBeenCalledWith(localMicTrack);
+    expect(room.localParticipant.publishTrack).toHaveBeenCalledWith(localMicTrack, {
+      source: "microphone",
+    });
     expect(startPioneroLiveKitAgentPlan).not.toHaveBeenCalled();
     expect(result.current.status).toBe("live");
     expect(result.current.monitorOnlyMode).toBe(true);

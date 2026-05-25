@@ -173,6 +173,13 @@ function buildMonitorResult({
   eventCounts = {},
   audioIngestStatus = "",
   sttStatus = "",
+  sttFramesBuffered = 0,
+  sttFlushesAttempted = 0,
+  sttFlushesSucceeded = 0,
+  sttFlushesFailed = 0,
+  sttLastFlushReasonCode = "",
+  transcriptsObserved = 0,
+  lastTranscript = "",
   llmStatus = "",
   ttsStatus = "",
   missing = null,
@@ -214,6 +221,13 @@ function buildMonitorResult({
     eventCounts: safeEventCounts(eventCounts),
     audioIngestStatus: safeText(audioIngestStatus),
     sttStatus: safeText(sttStatus),
+    sttFramesBuffered: n(sttFramesBuffered),
+    sttFlushesAttempted: n(sttFlushesAttempted),
+    sttFlushesSucceeded: n(sttFlushesSucceeded),
+    sttFlushesFailed: n(sttFlushesFailed),
+    sttLastFlushReasonCode: safeText(sttLastFlushReasonCode),
+    transcriptsObserved: n(transcriptsObserved),
+    lastTranscript: safeText(lastTranscript),
     llmStatus: safeText(llmStatus),
     ttsStatus: safeText(ttsStatus),
     ...(missing ? { missing } : {}),
@@ -229,6 +243,7 @@ function buildResultFromState({
   stopState = {},
 } = {}) {
   const audioIngest = finalState?.audioIngest || startState?.audioIngest || {};
+  const stt = finalState?.stt || startState?.stt || {};
 
   return buildMonitorResult({
     ok,
@@ -261,7 +276,14 @@ function buildResultFromState({
     lastTrackSource: audioIngest.lastTrackSource,
     eventCounts: audioIngest.eventCounts,
     audioIngestStatus: audioIngest.status,
-    sttStatus: finalState?.stt?.status || startState?.stt?.status,
+    sttStatus: stt.status,
+    sttFramesBuffered: stt.framesBuffered,
+    sttFlushesAttempted: stt.flushesAttempted,
+    sttFlushesSucceeded: stt.flushesSucceeded,
+    sttFlushesFailed: stt.flushesFailed,
+    sttLastFlushReasonCode: stt.lastFlushReasonCode,
+    transcriptsObserved: stt.transcriptsObserved,
+    lastTranscript: stt.lastTranscript,
     llmStatus: finalState?.llm?.status || startState?.llm?.status,
     ttsStatus: finalState?.tts?.status || startState?.tts?.status,
   });
