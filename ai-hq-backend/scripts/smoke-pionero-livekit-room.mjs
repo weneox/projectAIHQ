@@ -73,6 +73,31 @@ function hasMissingConfig(missing = {}) {
   return Object.values(missing).some((value) => value === true);
 }
 
+function readRoomClient(value = null) {
+  if (typeof value === "function") {
+    return {
+      RoomClass: value,
+      RoomEvent: value.RoomEvent || null,
+    };
+  }
+
+  if (value && typeof value === "object") {
+    return {
+      RoomClass: typeof value.RoomClass === "function"
+        ? value.RoomClass
+        : typeof value.Room === "function"
+          ? value.Room
+          : null,
+      RoomEvent: value.RoomEvent || null,
+    };
+  }
+
+  return {
+    RoomClass: null,
+    RoomEvent: null,
+  };
+}
+
 function buildSmokeResult({
   ok,
   skipped = false,
@@ -167,7 +192,8 @@ export async function runPioneroLiveKitLiveRoomSmoke({
             env,
             logger: null,
           });
-    const RoomClass = await resolveRoomClass({ roomName });
+    const roomClient = readRoomClient(await resolveRoomClass({ roomName }));
+    const { RoomClass, RoomEvent } = roomClient;
 
     if (typeof RoomClass !== "function") {
       return buildSmokeResult({
@@ -181,6 +207,7 @@ export async function runPioneroLiveKitLiveRoomSmoke({
 
     const runner = createRunner({
       RoomClass,
+      ...(RoomEvent ? { RoomEvent } : {}),
       env,
       logger: null,
       now,

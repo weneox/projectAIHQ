@@ -88,6 +88,16 @@ Diagnostics are limited to event counts, frame and byte counters, and safe track
 
 These diagnostics do not prove STT readiness. They only prove the ingest skeleton observed LiveKit room or track activity before a real STT/LLM/TTS loop is enabled.
 
+## Live Monitor Troubleshooting
+
+Use the live audio monitor counters to locate the first missing step:
+
+- `remoteParticipantsObserved = 0`: the browser is not in the same room or is not connected.
+- `remoteParticipantsObserved > 0` and `audioPublicationsObserved = 0`: the browser connected, but microphone audio was not published.
+- `audioPublicationsObserved > 0` and `subscribedAudioTracksObserved = 0`: the backend sees the publication, but subscription or RoomEvent mapping needs attention.
+- `subscribedAudioTracksObserved > 0` and `framesObserved = 0`: the backend subscribed, but audio frame extraction mapping needs attention.
+- `framesObserved > 0`: the ingest skeleton is ready for Soniox STT wiring.
+
 ## Environment
 
 LiveKit token and room planning use:

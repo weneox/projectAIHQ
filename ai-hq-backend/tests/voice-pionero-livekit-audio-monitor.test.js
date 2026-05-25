@@ -55,6 +55,15 @@ function assertDefaultMonitorShape(result = {}, reasonCode = "") {
     reasonCode,
     monitorSeconds: 20,
     observedAudio: false,
+    participantsObserved: 0,
+    remoteParticipantsObserved: 0,
+    trackPublicationsObserved: 0,
+    audioPublicationsObserved: 0,
+    subscribedAudioTracksObserved: 0,
+    lastParticipantIdentity: "",
+    lastPublicationKind: "",
+    lastPublicationSource: "",
+    lastPublicationSubscribed: false,
     tracksObserved: 0,
     framesObserved: 0,
     bytesObserved: 0,
@@ -141,6 +150,15 @@ test("pionero live audio monitor reports missing config with booleans only", asy
     reasonCode: "livekit_config_missing",
     monitorSeconds: 20,
     observedAudio: false,
+    participantsObserved: 0,
+    remoteParticipantsObserved: 0,
+    trackPublicationsObserved: 0,
+    audioPublicationsObserved: 0,
+    subscribedAudioTracksObserved: 0,
+    lastParticipantIdentity: "",
+    lastPublicationKind: "",
+    lastPublicationSource: "",
+    lastPublicationSubscribed: false,
     tracksObserved: 0,
     framesObserved: 0,
     bytesObserved: 0,
@@ -165,7 +183,8 @@ test("pionero live audio monitor reports missing config with booleans only", asy
 test("pionero live audio monitor connected runner output includes diagnostics", async () => {
   class FakeRoom {}
 
-  let waitedMs = 0;
+  const waitCalls = [];
+  let snapshotCalls = 0;
   let stopCalled = false;
 
   const result = await runPioneroLiveKitAudioMonitor({
@@ -207,7 +226,8 @@ test("pionero live audio monitor connected runner output includes diagnostics", 
             },
           };
         },
-        getState() {
+        snapshotDiagnostics() {
+          snapshotCalls += 1;
           return {
             status: "connected",
             networkIo: true,
@@ -216,6 +236,15 @@ test("pionero live audio monitor connected runner output includes diagnostics", 
             reasonCode: "",
             audioIngest: {
               status: "audio_observed",
+              participantsObserved: 2,
+              remoteParticipantsObserved: 1,
+              trackPublicationsObserved: 1,
+              audioPublicationsObserved: 1,
+              subscribedAudioTracksObserved: 1,
+              lastParticipantIdentity: "browser-1",
+              lastPublicationKind: "audio",
+              lastPublicationSource: "microphone",
+              lastPublicationSubscribed: true,
               tracksObserved: 1,
               framesObserved: 2,
               bytesObserved: 9,
@@ -250,7 +279,7 @@ test("pionero live audio monitor connected runner output includes diagnostics", 
       };
     },
     wait: async (ms) => {
-      waitedMs = ms;
+      waitCalls.push(ms);
     },
   });
 
@@ -264,6 +293,15 @@ test("pionero live audio monitor connected runner output includes diagnostics", 
   assert.equal(result.reasonCode, "");
   assert.equal(result.monitorSeconds, 3);
   assert.equal(result.observedAudio, true);
+  assert.equal(result.participantsObserved, 2);
+  assert.equal(result.remoteParticipantsObserved, 1);
+  assert.equal(result.trackPublicationsObserved, 1);
+  assert.equal(result.audioPublicationsObserved, 1);
+  assert.equal(result.subscribedAudioTracksObserved, 1);
+  assert.equal(result.lastParticipantIdentity, "browser-1");
+  assert.equal(result.lastPublicationKind, "audio");
+  assert.equal(result.lastPublicationSource, "microphone");
+  assert.equal(result.lastPublicationSubscribed, true);
   assert.equal(result.tracksObserved, 1);
   assert.equal(result.framesObserved, 2);
   assert.equal(result.bytesObserved, 9);
@@ -278,7 +316,8 @@ test("pionero live audio monitor connected runner output includes diagnostics", 
   assert.equal(result.sttStatus, "idle");
   assert.equal(result.llmStatus, "planned");
   assert.equal(result.ttsStatus, "planned");
-  assert.equal(waitedMs, 3000);
+  assert.deepEqual(waitCalls, [1000, 1000, 1000]);
+  assert.equal(snapshotCalls, 3);
   assert.equal(stopCalled, true);
   assertNoUnsafeOutputLeak(result);
 });

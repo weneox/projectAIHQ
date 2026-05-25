@@ -63,6 +63,9 @@ test("pionero LiveKit RoomClass factory returns null when disabled", async () =>
 
 test("pionero LiveKit RoomClass factory imports module Room shape", async () => {
   class FakeRoom {}
+  const FakeRoomEvent = {
+    TrackSubscribed: "trackSubscribed",
+  };
 
   const imports = [];
   const factory = createPioneroLiveKitRoomClassFactory({
@@ -72,18 +75,23 @@ test("pionero LiveKit RoomClass factory imports module Room shape", async () => 
     },
     importer: async (moduleName) => {
       imports.push(moduleName);
-      return { Room: FakeRoom };
+      return { Room: FakeRoom, RoomEvent: FakeRoomEvent };
     },
   });
 
   const RoomClass = await factory({ roomName: "pionero safe room" });
 
   assert.equal(RoomClass, FakeRoom);
+  assert.equal(RoomClass.RoomClass, FakeRoom);
+  assert.equal(RoomClass.RoomEvent, FakeRoomEvent);
   assert.deepEqual(imports, ["fake-livekit-room-client"]);
 });
 
 test("pionero LiveKit RoomClass factory supports default Room shape", async () => {
   class FakeRoom {}
+  const FakeRoomEvent = {
+    TrackPublished: "trackPublished",
+  };
 
   const factory = createPioneroLiveKitRoomClassFactory({
     env: {
@@ -91,13 +99,14 @@ test("pionero LiveKit RoomClass factory supports default Room shape", async () =
     },
     importer: async (moduleName) => {
       assert.equal(moduleName, "@livekit/rtc-node");
-      return { default: { Room: FakeRoom } };
+      return { default: { Room: FakeRoom, RoomEvent: FakeRoomEvent } };
     },
   });
 
   const RoomClass = await factory({ roomName: "pionero safe room" });
 
   assert.equal(RoomClass, FakeRoom);
+  assert.equal(RoomClass.RoomEvent, FakeRoomEvent);
 });
 
 test("pionero LiveKit RoomClass factory supports default function shape", async () => {
@@ -192,6 +201,38 @@ test("pionero LiveKit RoomClass factory invalid module shape logs safe warning",
       moduleName: "fake-livekit-invalid-client",
       roomName: "pionero safe room",
       reasonCode: "pionero_livekit_room_class_missing",
+    },
+  });
+  assertNoUnsafeLogLeak(logger.warnings);
+});
+
+test("pionero LiveKit RoomClass factory redacts unsafe module and room names", async () => {
+  const logger = createTestLogger();
+  const factory = createPioneroLiveKitRoomClassFactory({
+    env: {
+      PIONERO_LIVEKIT_ROOM_CLIENT_ENABLED: "1",
+      PIONERO_LIVEKIT_ROOM_CLIENT_MODULE:
+        "token-apiKey-apiSecret-jwt-rawAudio-audioBase64-audioChunk",
+    },
+    logger,
+    importer: async () => {
+      throw new Error("token-secret api-secret raw-audio-secret");
+    },
+  });
+
+  const RoomClass = await factory({
+    roomName: "token-apiKey-apiSecret-jwt-rawAudio-audioBase64-audioChunk",
+  });
+
+  assert.equal(RoomClass, null);
+  assert.equal(logger.warnings.length, 1);
+  assert.deepEqual(logger.warnings[0], {
+    event: "pionero.livekit.room_class_factory.import_failed",
+    fields: {
+      enabled: true,
+      moduleName: "[redacted]",
+      roomName: "[redacted]",
+      reasonCode: "pionero_livekit_room_class_import_failed",
     },
   });
   assertNoUnsafeLogLeak(logger.warnings);

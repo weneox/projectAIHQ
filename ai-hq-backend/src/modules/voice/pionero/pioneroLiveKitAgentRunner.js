@@ -31,7 +31,13 @@ const PIONERO_TTS_STATUSES = new Set([
   "error",
 ]);
 const DEFAULT_ROOM_AUDIO_EVENT_NAMES = [
+  "participantConnected",
+  "participantDisconnected",
+  "trackPublished",
+  "trackUnpublished",
   "trackSubscribed",
+  "trackUnsubscribed",
+  "trackSubscriptionFailed",
   "audioFrame",
   "audioChunk",
   "audioData",
@@ -206,6 +212,17 @@ function buildPioneroAudioIngestState(input = {}) {
     lastTrackKind: normalizePioneroTrackDiagnostic(input.lastTrackKind),
     lastTrackSource: normalizePioneroTrackDiagnostic(input.lastTrackSource),
     tracksObserved: n(input.tracksObserved),
+    participantsObserved: n(input.participantsObserved),
+    remoteParticipantsObserved: n(input.remoteParticipantsObserved),
+    trackPublicationsObserved: n(input.trackPublicationsObserved),
+    audioPublicationsObserved: n(input.audioPublicationsObserved),
+    subscribedAudioTracksObserved: n(input.subscribedAudioTracksObserved),
+    lastParticipantIdentity: normalizeSafeDiagnosticText(
+      input.lastParticipantIdentity
+    ),
+    lastPublicationKind: normalizePioneroTrackDiagnostic(input.lastPublicationKind),
+    lastPublicationSource: normalizePioneroTrackDiagnostic(input.lastPublicationSource),
+    lastPublicationSubscribed: input.lastPublicationSubscribed === true,
     framesObserved: n(input.framesObserved),
     bytesObserved: n(input.bytesObserved),
     lastObservedAt: s(input.lastObservedAt),
@@ -287,6 +304,15 @@ function readInitialAudioIngest(input = {}, { status, reasonCode } = {}) {
       lastTrackKind: "",
       lastTrackSource: "",
       tracksObserved: 0,
+      participantsObserved: 0,
+      remoteParticipantsObserved: 0,
+      trackPublicationsObserved: 0,
+      audioPublicationsObserved: 0,
+      subscribedAudioTracksObserved: 0,
+      lastParticipantIdentity: "",
+      lastPublicationKind: "",
+      lastPublicationSource: "",
+      lastPublicationSubscribed: false,
       framesObserved: 0,
       bytesObserved: 0,
       lastObservedAt: "",
@@ -303,6 +329,15 @@ function readInitialAudioIngest(input = {}, { status, reasonCode } = {}) {
       lastTrackKind: "",
       lastTrackSource: "",
       tracksObserved: 0,
+      participantsObserved: 0,
+      remoteParticipantsObserved: 0,
+      trackPublicationsObserved: 0,
+      audioPublicationsObserved: 0,
+      subscribedAudioTracksObserved: 0,
+      lastParticipantIdentity: "",
+      lastPublicationKind: "",
+      lastPublicationSource: "",
+      lastPublicationSubscribed: false,
       framesObserved: 0,
       bytesObserved: 0,
       lastObservedAt: "",
@@ -318,6 +353,15 @@ function readInitialAudioIngest(input = {}, { status, reasonCode } = {}) {
     lastTrackKind: "",
     lastTrackSource: "",
     tracksObserved: 0,
+    participantsObserved: 0,
+    remoteParticipantsObserved: 0,
+    trackPublicationsObserved: 0,
+    audioPublicationsObserved: 0,
+    subscribedAudioTracksObserved: 0,
+    lastParticipantIdentity: "",
+    lastPublicationKind: "",
+    lastPublicationSource: "",
+    lastPublicationSubscribed: false,
     framesObserved: 0,
     bytesObserved: 0,
     lastObservedAt: "",
@@ -410,7 +454,6 @@ function readTrackDiagnosticCandidate(value = {}) {
       source ||
       candidate.mediaStreamTrack ||
       candidate.track ||
-      candidate.sid ||
       candidate.trackSid
   );
 
@@ -419,6 +462,109 @@ function readTrackDiagnosticCandidate(value = {}) {
     kind: normalizePioneroTrackDiagnostic(kind),
     source: normalizePioneroTrackDiagnostic(source),
   };
+}
+
+function collectionValues(collection = null) {
+  if (!collection) return [];
+  if (Array.isArray(collection)) return collection;
+
+  if (typeof collection.values === "function") {
+    try {
+      return Array.from(collection.values());
+    } catch {
+      return [];
+    }
+  }
+
+  if (typeof collection === "object") {
+    return Object.values(collection);
+  }
+
+  return [];
+}
+
+function readParticipantDiagnosticCandidate(value = {}) {
+  const candidate = obj(value);
+  const identity = normalizeSafeDiagnosticText(
+    candidate.identity ||
+      candidate.name ||
+      candidate.sid
+  );
+
+  return {
+    looksLikeParticipant: Boolean(identity || candidate.trackPublications),
+    identity,
+  };
+}
+
+function readPublicationDiagnosticCandidate(value = {}) {
+  const candidate = obj(value);
+  const nestedTrack = obj(candidate.track);
+  const mediaStreamTrack = obj(candidate.mediaStreamTrack || nestedTrack.mediaStreamTrack);
+  const kind = normalizePioneroTrackDiagnostic(
+    candidate.kind ||
+      candidate.trackKind ||
+      candidate.type ||
+      nestedTrack.kind ||
+      mediaStreamTrack.kind
+  );
+  const source = normalizePioneroTrackDiagnostic(
+    candidate.source ||
+      candidate.trackSource ||
+      nestedTrack.source ||
+      mediaStreamTrack.source
+  );
+  const subscribed = Boolean(
+    candidate.subscribed === true ||
+      candidate.isSubscribed === true ||
+      candidate.trackSubscribed === true ||
+      nestedTrack.subscribed === true ||
+      nestedTrack.isSubscribed === true ||
+      candidate.track
+  );
+  const looksLikePublication = Boolean(
+    kind ||
+      source ||
+      candidate.track ||
+      candidate.trackSid ||
+      candidate.trackName ||
+      candidate.isSubscribed !== undefined ||
+      candidate.subscribed !== undefined
+  );
+
+  return {
+    looksLikePublication,
+    kind,
+    source,
+    subscribed,
+  };
+}
+
+function isAudioPublicationDiagnostic(diagnostic = {}) {
+  return (
+    diagnostic.kind === "audio" ||
+    diagnostic.source === "microphone" ||
+    diagnostic.source === "audio"
+  );
+}
+
+function participantPublications(participant = {}) {
+  const seen = new Set();
+  const publications = [];
+
+  [
+    participant.trackPublications,
+    participant.audioTrackPublications,
+    participant.videoTrackPublications,
+  ].forEach((collection) => {
+    collectionValues(collection).forEach((publication) => {
+      if (!publication || seen.has(publication)) return;
+      seen.add(publication);
+      publications.push(publication);
+    });
+  });
+
+  return publications;
 }
 
 function readFrameCandidate(values = []) {
@@ -440,7 +586,13 @@ function readRoomAudioEventNames(input = {}) {
   const roomEvent = obj(input.RoomEvent || input.roomEvent);
 
   return uniq([
+    roomEvent.ParticipantConnected,
+    roomEvent.ParticipantDisconnected,
+    roomEvent.TrackPublished,
+    roomEvent.TrackUnpublished,
     roomEvent.TrackSubscribed,
+    roomEvent.TrackUnsubscribed,
+    roomEvent.TrackSubscriptionFailed,
     roomEvent.AudioFrame,
     ...DEFAULT_ROOM_AUDIO_EVENT_NAMES,
     ...array(input.audioIngestEventNames),
@@ -480,12 +632,45 @@ export function recordPioneroAudioIngestEvent(state = {}, input = {}, options = 
   const eventName = normalizePioneroAudioIngestEventName(
     payload.eventName || payload.name || options.eventName
   );
+  const eventNameKey = eventName.toLowerCase();
   const trackDiagnostics = readTrackDiagnosticCandidate(
     payload.track ||
       payload.publication ||
       payload.trackPublication ||
       payload.firstArg
   );
+  const publicationDiagnostics = readPublicationDiagnosticCandidate(
+    payload.publication ||
+      payload.track ||
+      payload.trackPublication ||
+      payload.firstArg ||
+      payload.secondArg
+  );
+  const participantDiagnostics = readParticipantDiagnosticCandidate(
+    payload.participant ||
+      payload.thirdArg ||
+      payload.secondArg ||
+      payload.firstArg
+  );
+  const subscribedAudioPublication = Boolean(
+    isAudioPublicationDiagnostic(publicationDiagnostics) &&
+      (
+        publicationDiagnostics.subscribed ||
+        eventNameKey.includes("tracksubscribed")
+      )
+  );
+  const nextTrackPublicationsObserved = currentAudioIngest.trackPublicationsObserved +
+    (publicationDiagnostics.looksLikePublication ? 1 : 0);
+  const nextAudioPublicationsObserved = currentAudioIngest.audioPublicationsObserved +
+    (
+      publicationDiagnostics.looksLikePublication &&
+      isAudioPublicationDiagnostic(publicationDiagnostics)
+        ? 1
+        : 0
+    );
+  const nextSubscribedAudioTracksObserved =
+    currentAudioIngest.subscribedAudioTracksObserved +
+    (subscribedAudioPublication ? 1 : 0);
 
   return {
     ...safeState,
@@ -501,6 +686,93 @@ export function recordPioneroAudioIngestEvent(state = {}, input = {}, options = 
         trackDiagnostics.source || currentAudioIngest.lastTrackSource,
       tracksObserved: currentAudioIngest.tracksObserved +
         (trackDiagnostics.looksLikeTrack ? 1 : 0),
+      trackPublicationsObserved: nextTrackPublicationsObserved,
+      audioPublicationsObserved: nextAudioPublicationsObserved,
+      subscribedAudioTracksObserved: nextSubscribedAudioTracksObserved,
+      lastParticipantIdentity:
+        participantDiagnostics.identity ||
+        currentAudioIngest.lastParticipantIdentity,
+      lastPublicationKind:
+        publicationDiagnostics.kind ||
+        currentAudioIngest.lastPublicationKind,
+      lastPublicationSource:
+        publicationDiagnostics.source ||
+        currentAudioIngest.lastPublicationSource,
+      lastPublicationSubscribed: publicationDiagnostics.looksLikePublication
+        ? publicationDiagnostics.subscribed || eventNameKey.includes("tracksubscribed")
+        : currentAudioIngest.lastPublicationSubscribed,
+    },
+  };
+}
+
+export function snapshotPioneroRoomParticipants(state = {}, room = null) {
+  const safeState = safeStateObject(state);
+  const currentAudioIngest = buildPioneroAudioIngestState(safeState.audioIngest);
+  const remoteParticipants = collectionValues(room?.remoteParticipants);
+  const hasLocalParticipant = Boolean(room?.localParticipant);
+  let trackPublicationsObserved = 0;
+  let audioPublicationsObserved = 0;
+  let subscribedAudioTracksObserved = 0;
+  let lastParticipantIdentity = currentAudioIngest.lastParticipantIdentity;
+  let lastPublicationKind = currentAudioIngest.lastPublicationKind;
+  let lastPublicationSource = currentAudioIngest.lastPublicationSource;
+  let lastPublicationSubscribed = currentAudioIngest.lastPublicationSubscribed;
+
+  remoteParticipants.forEach((participant) => {
+    const participantDiagnostics = readParticipantDiagnosticCandidate(participant);
+
+    if (participantDiagnostics.identity) {
+      lastParticipantIdentity = participantDiagnostics.identity;
+    }
+
+    participantPublications(participant).forEach((publication) => {
+      const publicationDiagnostics = readPublicationDiagnosticCandidate(publication);
+
+      if (!publicationDiagnostics.looksLikePublication) return;
+
+      trackPublicationsObserved += 1;
+      lastPublicationKind = publicationDiagnostics.kind || lastPublicationKind;
+      lastPublicationSource = publicationDiagnostics.source || lastPublicationSource;
+      lastPublicationSubscribed = publicationDiagnostics.subscribed;
+
+      if (isAudioPublicationDiagnostic(publicationDiagnostics)) {
+        audioPublicationsObserved += 1;
+
+        if (publicationDiagnostics.subscribed) {
+          subscribedAudioTracksObserved += 1;
+        }
+      }
+    });
+  });
+
+  return {
+    ...safeState,
+    audioIngest: {
+      ...currentAudioIngest,
+      participantsObserved: Math.max(
+        currentAudioIngest.participantsObserved,
+        remoteParticipants.length + (hasLocalParticipant ? 1 : 0)
+      ),
+      remoteParticipantsObserved: Math.max(
+        currentAudioIngest.remoteParticipantsObserved,
+        remoteParticipants.length
+      ),
+      trackPublicationsObserved: Math.max(
+        currentAudioIngest.trackPublicationsObserved,
+        trackPublicationsObserved
+      ),
+      audioPublicationsObserved: Math.max(
+        currentAudioIngest.audioPublicationsObserved,
+        audioPublicationsObserved
+      ),
+      subscribedAudioTracksObserved: Math.max(
+        currentAudioIngest.subscribedAudioTracksObserved,
+        subscribedAudioTracksObserved
+      ),
+      lastParticipantIdentity,
+      lastPublicationKind,
+      lastPublicationSource,
+      lastPublicationSubscribed,
     },
   };
 }
@@ -899,7 +1171,10 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
         currentState = recordPioneroAudioIngestEvent(currentState, {
           eventName,
           firstArg: args[0],
+          secondArg: args[1],
+          thirdArg: args[2],
         });
+        currentState = snapshotPioneroRoomParticipants(currentState, targetRoom);
         attachTrackAudioListeners(args[0]);
 
         const frame = readFrameCandidate(args);
@@ -1096,8 +1371,14 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
     return currentState;
   }
 
+  function snapshotDiagnostics() {
+    currentState = snapshotPioneroRoomParticipants(currentState, room);
+    return currentState;
+  }
+
   return {
     getState,
+    snapshotDiagnostics,
     start,
     stop,
   };

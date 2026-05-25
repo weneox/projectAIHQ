@@ -1876,29 +1876,62 @@ async function handlePioneroLiveKitAgentPlan(req, res) {
   }
 }
 
-async function readPioneroLiveKitRouteRoomClass({
+function readPioneroLiveKitRoomClient(value = null) {
+  if (typeof value === "function") {
+    return {
+      RoomClass: value,
+      RoomEvent: value.RoomEvent || null,
+    };
+  }
+
+  if (value && typeof value === "object") {
+    return {
+      RoomClass: typeof value.RoomClass === "function"
+        ? value.RoomClass
+        : typeof value.Room === "function"
+          ? value.Room
+          : null,
+      RoomEvent: value.RoomEvent || null,
+    };
+  }
+
+  return {
+    RoomClass: null,
+    RoomEvent: null,
+  };
+}
+
+async function readPioneroLiveKitRouteRoomClient({
   req,
   roomName = "",
   logger = null,
   pioneroLiveKitRoomClassFactory = null,
 } = {}) {
   if (typeof pioneroLiveKitRoomClassFactory !== "function") {
-    return null;
+    return {
+      RoomClass: null,
+      RoomEvent: null,
+    };
   }
 
   try {
-    return await pioneroLiveKitRoomClassFactory({
+    const roomClient = await pioneroLiveKitRoomClassFactory({
       req,
       roomName,
       logger,
-    }) || null;
-  } catch (err) {
-    logger?.warn?.("voice.pionero.livekit.agent.room_class_factory_failed", {
-      reasonCode: "pionero_livekit_room_class_factory_failed",
-      error: s(err?.message || err),
     });
 
-    return null;
+    return readPioneroLiveKitRoomClient(roomClient);
+    } catch (err) {
+      logger?.warn?.("voice.pionero.livekit.agent.room_class_factory_failed", {
+        reasonCode: "pionero_livekit_room_class_factory_failed",
+        error: null,
+      });
+
+      return {
+      RoomClass: null,
+      RoomEvent: null,
+    };
   }
 }
 
@@ -1911,7 +1944,7 @@ async function handlePioneroLiveKitAgentStartPlan(
 
   try {
     const roomName = req.body?.roomName || req.query?.roomName;
-    const RoomClass = await readPioneroLiveKitRouteRoomClass({
+    const { RoomClass, RoomEvent } = await readPioneroLiveKitRouteRoomClient({
       req,
       roomName,
       logger,
@@ -1921,6 +1954,7 @@ async function handlePioneroLiveKitAgentStartPlan(
       roomName,
       logger,
       ...(RoomClass ? { RoomClass } : {}),
+      ...(RoomEvent ? { RoomEvent } : {}),
     });
 
     return ok(res, state);
