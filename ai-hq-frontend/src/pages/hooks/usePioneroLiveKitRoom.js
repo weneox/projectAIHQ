@@ -41,6 +41,12 @@ const LLM_STATUSES = new Set([
   "turn_plan_built",
   "error",
 ]);
+const TTS_STATUSES = new Set([
+  "idle",
+  "planned",
+  "speech_plan_built",
+  "error",
+]);
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim() || fallback;
@@ -137,6 +143,25 @@ function readAgentLlmState(llm = {}) {
   };
 }
 
+function readAgentTtsState(tts = {}) {
+  const payload = tts && typeof tts === "object" && !Array.isArray(tts)
+    ? tts
+    : {};
+  const status = s(payload.status, "idle");
+
+  return {
+    agentTtsProvider: s(payload.provider, "cartesia"),
+    agentTtsStatus: TTS_STATUSES.has(status) ? status : "idle",
+    agentTtsEnabled: payload.enabled === true,
+    agentTtsNetworkIo: payload.networkIo === true,
+    agentTtsSpeechPlansCreated: n(payload.speechPlansCreated),
+    agentTtsLastInputText: s(payload.lastInputText).slice(0, 2_000),
+    agentTtsLastAudioPlan: s(payload.lastAudioPlan).slice(0, 2_000),
+    agentTtsLastObservedAt: s(payload.lastObservedAt),
+    agentTtsReasonCode: s(payload.reasonCode),
+  };
+}
+
 function readAgentState(result = {}) {
   const readiness = result?.readiness || {};
   const agentStatus = s(result?.status, "unknown");
@@ -157,6 +182,7 @@ function readAgentState(result = {}) {
     ...readAgentAudioIngestState(result?.audioIngest),
     ...readAgentSttState(result?.stt),
     ...readAgentLlmState(result?.llm),
+    ...readAgentTtsState(result?.tts),
   };
 }
 
@@ -210,6 +236,15 @@ export default function usePioneroLiveKitRoom({
   const [agentLlmLastPlannedResponse, setAgentLlmLastPlannedResponse] = useState("");
   const [agentLlmLastObservedAt, setAgentLlmLastObservedAt] = useState("");
   const [agentLlmReasonCode, setAgentLlmReasonCode] = useState("");
+  const [agentTtsProvider, setAgentTtsProvider] = useState("cartesia");
+  const [agentTtsStatus, setAgentTtsStatus] = useState("idle");
+  const [agentTtsEnabled, setAgentTtsEnabled] = useState(false);
+  const [agentTtsNetworkIo, setAgentTtsNetworkIo] = useState(false);
+  const [agentTtsSpeechPlansCreated, setAgentTtsSpeechPlansCreated] = useState(0);
+  const [agentTtsLastInputText, setAgentTtsLastInputText] = useState("");
+  const [agentTtsLastAudioPlan, setAgentTtsLastAudioPlan] = useState("");
+  const [agentTtsLastObservedAt, setAgentTtsLastObservedAt] = useState("");
+  const [agentTtsReasonCode, setAgentTtsReasonCode] = useState("");
 
   const localMicTrackRef = useRef(null);
   const mountedRef = useRef(false);
@@ -268,6 +303,19 @@ export default function usePioneroLiveKitRoom({
     );
     setAgentLlmLastObservedAt(s(nextAgentState.agentLlmLastObservedAt));
     setAgentLlmReasonCode(s(nextAgentState.agentLlmReasonCode));
+    setAgentTtsProvider(s(nextAgentState.agentTtsProvider, "cartesia"));
+    setAgentTtsStatus(s(nextAgentState.agentTtsStatus, "idle"));
+    setAgentTtsEnabled(nextAgentState.agentTtsEnabled === true);
+    setAgentTtsNetworkIo(nextAgentState.agentTtsNetworkIo === true);
+    setAgentTtsSpeechPlansCreated(n(nextAgentState.agentTtsSpeechPlansCreated));
+    setAgentTtsLastInputText(
+      s(nextAgentState.agentTtsLastInputText).slice(0, 2_000)
+    );
+    setAgentTtsLastAudioPlan(
+      s(nextAgentState.agentTtsLastAudioPlan).slice(0, 2_000)
+    );
+    setAgentTtsLastObservedAt(s(nextAgentState.agentTtsLastObservedAt));
+    setAgentTtsReasonCode(s(nextAgentState.agentTtsReasonCode));
   }, []);
 
   const clearAgentState = useCallback(() => {
@@ -298,6 +346,15 @@ export default function usePioneroLiveKitRoom({
       agentLlmLastPlannedResponse: "",
       agentLlmLastObservedAt: "",
       agentLlmReasonCode: "",
+      agentTtsProvider: "cartesia",
+      agentTtsStatus: "idle",
+      agentTtsEnabled: false,
+      agentTtsNetworkIo: false,
+      agentTtsSpeechPlansCreated: 0,
+      agentTtsLastInputText: "",
+      agentTtsLastAudioPlan: "",
+      agentTtsLastObservedAt: "",
+      agentTtsReasonCode: "",
     });
   }, [setSafeAgentState]);
 
@@ -462,6 +519,15 @@ export default function usePioneroLiveKitRoom({
           agentLlmLastPlannedResponse: "",
           agentLlmLastObservedAt: "",
           agentLlmReasonCode: "pionero_agent_start_plan_failed",
+          agentTtsProvider: "cartesia",
+          agentTtsStatus: "error",
+          agentTtsEnabled: false,
+          agentTtsNetworkIo: false,
+          agentTtsSpeechPlansCreated: 0,
+          agentTtsLastInputText: "",
+          agentTtsLastAudioPlan: "",
+          agentTtsLastObservedAt: "",
+          agentTtsReasonCode: "pionero_agent_start_plan_failed",
         });
       }
 
@@ -544,5 +610,14 @@ export default function usePioneroLiveKitRoom({
     agentLlmLastPlannedResponse,
     agentLlmLastObservedAt,
     agentLlmReasonCode,
+    agentTtsProvider,
+    agentTtsStatus,
+    agentTtsEnabled,
+    agentTtsNetworkIo,
+    agentTtsSpeechPlansCreated,
+    agentTtsLastInputText,
+    agentTtsLastAudioPlan,
+    agentTtsLastObservedAt,
+    agentTtsReasonCode,
   };
 }

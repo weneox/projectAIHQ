@@ -1,4 +1,4 @@
-import { fireEvent, render, waitFor } from "@testing-library/react";
+﻿import { fireEvent, render, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import BrowserVoiceCall from "../../pages/BrowserVoiceCall.jsx";
@@ -81,6 +81,15 @@ function buildPioneroHook(overrides = {}) {
     agentLlmLastPlannedResponse: "",
     agentLlmLastObservedAt: "",
     agentLlmReasonCode: "",
+    agentTtsProvider: "cartesia",
+    agentTtsStatus: "idle",
+    agentTtsEnabled: false,
+    agentTtsNetworkIo: false,
+    agentTtsSpeechPlansCreated: 0,
+    agentTtsLastInputText: "",
+    agentTtsLastAudioPlan: "",
+    agentTtsLastObservedAt: "",
+    agentTtsReasonCode: "",
     ...overrides,
   };
 }
@@ -130,7 +139,7 @@ describe("BrowserVoiceCall", () => {
     expect(getByText("Three voice lanes")).toBeTruthy();
     expect(getByText("GPT Realtime WebRTC")).toBeTruthy();
     expect(getByText("Pionero LiveKit realtime lane")).toBeTruthy();
-    expect(getByText("Agent start-plan, ingest skeleton, STT skeleton, and LLM turn-plan skeleton only; full AI loop is not running yet.")).toBeTruthy();
+    expect(getByText("Agent start-plan, ingest skeleton, STT skeleton, LLM turn-plan skeleton, and TTS skeleton only; full AI loop is not running yet.")).toBeTruthy();
     expect(getByText("Agent start-plan status")).toBeTruthy();
     expect(getByText("Agent reason code")).toBeTruthy();
     expect(getByText("Agent network IO")).toBeTruthy();
@@ -146,6 +155,10 @@ describe("BrowserVoiceCall", () => {
     expect(getByText("Turns planned")).toBeTruthy();
     expect(getByText("Last input transcript")).toBeTruthy();
     expect(getByText("Last planned response")).toBeTruthy();
+    expect(getByText("TTS skeleton")).toBeTruthy();
+    expect(getByText("Speech plans created")).toBeTruthy();
+    expect(getByText("Last input text")).toBeTruthy();
+    expect(getByText("Last audio plan")).toBeTruthy();
     expect(getByText("Speech Bridge / Soniox lane")).toBeTruthy();
     expect(getByText("Soniox readiness")).toBeTruthy();
     expect(getByLabelText("Speech bridge text")).toBeTruthy();
@@ -220,11 +233,20 @@ describe("BrowserVoiceCall", () => {
       agentLlmLastPlannedResponse: "Turn plan pending real LLM.",
       agentLlmLastObservedAt: "2026-01-02T03:04:07.000Z",
       agentLlmReasonCode: "llm_turn_plan_for_test",
+      agentTtsProvider: "cartesia",
+      agentTtsStatus: "speech_plan_built",
+      agentTtsEnabled: true,
+      agentTtsNetworkIo: false,
+      agentTtsSpeechPlansCreated: 1,
+      agentTtsLastInputText: "Turn plan pending real LLM.",
+      agentTtsLastAudioPlan: "TTS plan pending real synthesis.",
+      agentTtsLastObservedAt: "2026-01-02T03:04:08.000Z",
+      agentTtsReasonCode: "tts_plan_for_test",
     });
     useBrowserVoiceCall.mockReturnValue(hook);
     usePioneroLiveKitRoom.mockReturnValue(pioneroHook);
 
-    const { getByText } = render(<BrowserVoiceCall />);
+    const { getByText, getAllByText } = render(<BrowserVoiceCall />);
 
     expect(getByText("planned (not ready)")).toBeTruthy();
     expect(getByText("livekit_room_client_not_configured")).toBeTruthy();
@@ -240,9 +262,14 @@ describe("BrowserVoiceCall", () => {
     expect(getByText("fast_text_llm")).toBeTruthy();
     expect(getByText("turn_plan_built")).toBeTruthy();
     expect(getByText("Pionero transcript for turn plan")).toBeTruthy();
-    expect(getByText("Turn plan pending real LLM.")).toBeTruthy();
+    expect(getAllByText("Turn plan pending real LLM.").length).toBeGreaterThanOrEqual(2);
     expect(getByText("2026-01-02T03:04:07.000Z")).toBeTruthy();
     expect(getByText("llm_turn_plan_for_test")).toBeTruthy();
+    expect(getByText("cartesia")).toBeTruthy();
+    expect(getByText("speech_plan_built")).toBeTruthy();
+    expect(getByText("TTS plan pending real synthesis.")).toBeTruthy();
+    expect(getByText("2026-01-02T03:04:08.000Z")).toBeTruthy();
+    expect(getByText("tts_plan_for_test")).toBeTruthy();
 
     fireEvent.click(getByText("End GPT Realtime call"));
     expect(hook.stopCall).toHaveBeenCalledTimes(1);
@@ -254,3 +281,4 @@ describe("BrowserVoiceCall", () => {
     expect(hook.speechBridge.stopRecording).toHaveBeenCalledTimes(1);
   });
 });
+
