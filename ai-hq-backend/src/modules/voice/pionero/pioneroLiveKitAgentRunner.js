@@ -107,6 +107,10 @@ function n(value, fallback = 0) {
   return Math.floor(numericValue);
 }
 
+function firstDefined(...values) {
+  return values.find((value) => value !== undefined && value !== null && value !== "");
+}
+
 function normalizeSafeDiagnosticText(
   value = "",
   {
@@ -145,6 +149,103 @@ function normalizePioneroTrackDiagnostic(value = "") {
     maxLength: 48,
     lower: true,
   });
+}
+
+function compactDiagnosticLabel(value = "") {
+  return s(value).toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function normalizeTrackKindLabel(value = "") {
+  const compact = compactDiagnosticLabel(value);
+
+  if (compact.includes("audio")) return "audio";
+  if (compact.includes("video")) return "video";
+
+  return normalizePioneroTrackDiagnostic(value);
+}
+
+function normalizeTrackSourceLabel(value = "") {
+  const compact = compactDiagnosticLabel(value);
+
+  if (compact.includes("microphone") || compact === "mic") return "microphone";
+  if (compact.includes("camera")) return "camera";
+  if (compact.includes("screenshareaudio")) return "screen_share_audio";
+  if (compact.includes("screenshare") || compact.includes("screen")) {
+    return "screen_share";
+  }
+  if (compact === "audio") return "audio";
+
+  return normalizePioneroTrackDiagnostic(value);
+}
+
+function readEnumDiagnostic(value, enumObject = null, normalizeLabel) {
+  if (!enumObject || typeof enumObject !== "object") return "";
+
+  const rawValue = s(value);
+
+  for (const [key, enumValue] of Object.entries(enumObject)) {
+    if (enumValue === value || s(enumValue) === rawValue) {
+      const normalized = normalizeLabel(
+        /^[0-9]+$/.test(key) ? enumValue : key
+      );
+      if (normalized) return normalized;
+    }
+  }
+
+  return "";
+}
+
+function readDiagnosticOptions(options = {}) {
+  return {
+    TrackKind: options.TrackKind || options.trackKind || null,
+    TrackSource: options.TrackSource || options.trackSource || null,
+  };
+}
+
+function normalizeTrackKind(value = "", options = {}) {
+  const diagnosticOptions = readDiagnosticOptions(options);
+  const enumValue = readEnumDiagnostic(
+    value,
+    diagnosticOptions.TrackKind,
+    normalizeTrackKindLabel
+  );
+
+  if (enumValue) return enumValue;
+
+  if (typeof value === "number" || /^[0-9]+$/.test(s(value))) {
+    const fallback = {
+      1: "audio",
+      2: "video",
+    }[s(value)];
+
+    return fallback || "";
+  }
+
+  return normalizeTrackKindLabel(value);
+}
+
+function normalizeTrackSource(value = "", options = {}) {
+  const diagnosticOptions = readDiagnosticOptions(options);
+  const enumValue = readEnumDiagnostic(
+    value,
+    diagnosticOptions.TrackSource,
+    normalizeTrackSourceLabel
+  );
+
+  if (enumValue) return enumValue;
+
+  if (typeof value === "number" || /^[0-9]+$/.test(s(value))) {
+    const fallback = {
+      1: "camera",
+      2: "microphone",
+      3: "screen_share",
+      4: "screen_share_audio",
+    }[s(value)];
+
+    return fallback || "";
+  }
+
+  return normalizeTrackSourceLabel(value);
 }
 
 function buildPioneroAudioEventCounts(value = {}) {
@@ -194,7 +295,19 @@ function readFrameByteLength(frame) {
 
   const nested = frame.data || frame.audio || frame.audioFrame || frame.chunk || frame.frame;
 
-  return nested && nested !== frame ? readFrameByteLength(nested) : 0;
+  if (nested && nested !== frame) {
+    return readFrameByteLength(nested);
+  }
+
+  const sampleCount = n(frame.samplesPerChannel) * n(
+    frame.channels || frame.numChannels
+  );
+
+  if (sampleCount > 0) {
+    return sampleCount * 2;
+  }
+
+  return 0;
 }
 
 function buildPioneroAudioIngestState(input = {}) {
@@ -217,6 +330,14 @@ function buildPioneroAudioIngestState(input = {}) {
     trackPublicationsObserved: n(input.trackPublicationsObserved),
     audioPublicationsObserved: n(input.audioPublicationsObserved),
     subscribedAudioTracksObserved: n(input.subscribedAudioTracksObserved),
+    audioStreamsOpened: n(input.audioStreamsOpened),
+    audioStreamFramesObserved: n(input.audioStreamFramesObserved),
+    audioStreamReadErrors: n(input.audioStreamReadErrors),
+    lastAudioStreamReasonCode: normalizePioneroAudioIngestEventName(
+      input.lastAudioStreamReasonCode
+    ) === "unknown_event"
+      ? ""
+      : normalizePioneroAudioIngestEventName(input.lastAudioStreamReasonCode),
     lastParticipantIdentity: normalizeSafeDiagnosticText(
       input.lastParticipantIdentity
     ),
@@ -309,6 +430,10 @@ function readInitialAudioIngest(input = {}, { status, reasonCode } = {}) {
       trackPublicationsObserved: 0,
       audioPublicationsObserved: 0,
       subscribedAudioTracksObserved: 0,
+      audioStreamsOpened: 0,
+      audioStreamFramesObserved: 0,
+      audioStreamReadErrors: 0,
+      lastAudioStreamReasonCode: "",
       lastParticipantIdentity: "",
       lastPublicationKind: "",
       lastPublicationSource: "",
@@ -334,6 +459,10 @@ function readInitialAudioIngest(input = {}, { status, reasonCode } = {}) {
       trackPublicationsObserved: 0,
       audioPublicationsObserved: 0,
       subscribedAudioTracksObserved: 0,
+      audioStreamsOpened: 0,
+      audioStreamFramesObserved: 0,
+      audioStreamReadErrors: 0,
+      lastAudioStreamReasonCode: "",
       lastParticipantIdentity: "",
       lastPublicationKind: "",
       lastPublicationSource: "",
@@ -358,6 +487,10 @@ function readInitialAudioIngest(input = {}, { status, reasonCode } = {}) {
     trackPublicationsObserved: 0,
     audioPublicationsObserved: 0,
     subscribedAudioTracksObserved: 0,
+    audioStreamsOpened: 0,
+    audioStreamFramesObserved: 0,
+    audioStreamReadErrors: 0,
+    lastAudioStreamReasonCode: "",
     lastParticipantIdentity: "",
     lastPublicationKind: "",
     lastPublicationSource: "",
@@ -420,34 +553,51 @@ function readInitialTts(input = {}, { status } = {}) {
   };
 }
 
-function isAudioTrack(track = {}) {
-  const kind = s(track.kind || track.mediaStreamTrack?.kind).toLowerCase();
-  const source = s(track.source).toLowerCase();
+function isAudioTrack(track = {}, options = {}) {
+  const kind = normalizeTrackKind(
+    firstDefined(track.kind, track.mediaStreamTrack?.kind),
+    options
+  );
+  const source = normalizeTrackSource(
+    firstDefined(track.source, track.mediaStreamTrack?.source),
+    options
+  );
 
-  return kind === "audio" || source === "microphone" || source === "audio";
+  return (
+    kind === "audio" ||
+    source === "microphone" ||
+    source === "audio" ||
+    source === "screen_share_audio"
+  );
 }
 
-function readTrackDiagnosticCandidate(value = {}) {
+function readTrackDiagnosticCandidate(value = {}, options = {}) {
   const candidate = obj(value);
 
   if (!candidate || Object.keys(candidate).length === 0) return {};
 
   const nestedTrack = obj(candidate.track);
   const mediaStreamTrack = obj(candidate.mediaStreamTrack);
-  const kind = s(
-    candidate.kind ||
-      candidate.trackKind ||
-      candidate.type ||
-      mediaStreamTrack.kind ||
-      nestedTrack.kind ||
+  const kind = normalizeTrackKind(
+    firstDefined(
+      candidate.kind,
+      candidate.trackKind,
+      candidate.type,
+      mediaStreamTrack.kind,
+      nestedTrack.kind,
       nestedTrack.mediaStreamTrack?.kind
+    ),
+    options
   );
-  const source = s(
-    candidate.source ||
-      candidate.trackSource ||
-      mediaStreamTrack.source ||
-      nestedTrack.source ||
+  const source = normalizeTrackSource(
+    firstDefined(
+      candidate.source,
+      candidate.trackSource,
+      mediaStreamTrack.source,
+      nestedTrack.source,
       nestedTrack.mediaStreamTrack?.source
+    ),
+    options
   );
   const looksLikeTrack = Boolean(
     kind ||
@@ -459,8 +609,8 @@ function readTrackDiagnosticCandidate(value = {}) {
 
   return {
     looksLikeTrack,
-    kind: normalizePioneroTrackDiagnostic(kind),
-    source: normalizePioneroTrackDiagnostic(source),
+    kind,
+    source,
   };
 }
 
@@ -497,22 +647,28 @@ function readParticipantDiagnosticCandidate(value = {}) {
   };
 }
 
-function readPublicationDiagnosticCandidate(value = {}) {
+function readPublicationDiagnosticCandidate(value = {}, options = {}) {
   const candidate = obj(value);
   const nestedTrack = obj(candidate.track);
   const mediaStreamTrack = obj(candidate.mediaStreamTrack || nestedTrack.mediaStreamTrack);
-  const kind = normalizePioneroTrackDiagnostic(
-    candidate.kind ||
-      candidate.trackKind ||
-      candidate.type ||
-      nestedTrack.kind ||
+  const kind = normalizeTrackKind(
+    firstDefined(
+      candidate.kind,
+      candidate.trackKind,
+      candidate.type,
+      nestedTrack.kind,
       mediaStreamTrack.kind
+    ),
+    options
   );
-  const source = normalizePioneroTrackDiagnostic(
-    candidate.source ||
-      candidate.trackSource ||
-      nestedTrack.source ||
+  const source = normalizeTrackSource(
+    firstDefined(
+      candidate.source,
+      candidate.trackSource,
+      nestedTrack.source,
       mediaStreamTrack.source
+    ),
+    options
   );
   const subscribed = Boolean(
     candidate.subscribed === true ||
@@ -544,7 +700,8 @@ function isAudioPublicationDiagnostic(diagnostic = {}) {
   return (
     diagnostic.kind === "audio" ||
     diagnostic.source === "microphone" ||
-    diagnostic.source === "audio"
+    diagnostic.source === "audio" ||
+    diagnostic.source === "screen_share_audio"
   );
 }
 
@@ -567,11 +724,11 @@ function participantPublications(participant = {}) {
   return publications;
 }
 
-function readFrameCandidate(values = []) {
+function readFrameCandidate(values = [], options = {}) {
   for (const value of values) {
     if (value === null || value === undefined) continue;
     if (typeof value === "string") return value;
-    if (readTrackDiagnosticCandidate(value).looksLikeTrack) continue;
+    if (readTrackDiagnosticCandidate(value, options).looksLikeTrack) continue;
     if (typeof value?.byteLength === "number") return value;
     if (ArrayBuffer.isView(value) || value instanceof ArrayBuffer) return value;
 
@@ -619,6 +776,11 @@ export function recordPioneroAudioIngestFrame(state = {}, frame = null, options 
       status: "audio_observed",
       framesObserved: currentAudioIngest.framesObserved + 1,
       bytesObserved: currentAudioIngest.bytesObserved + bytesObserved,
+      audioStreamFramesObserved: currentAudioIngest.audioStreamFramesObserved +
+        (options.audioStreamFrame === true ? 1 : 0),
+      lastAudioStreamReasonCode: options.audioStreamFrame === true
+        ? "audio_stream_frame_observed"
+        : currentAudioIngest.lastAudioStreamReasonCode,
       lastObservedAt: readNowISOString(options.now),
       reasonCode: "",
     },
@@ -637,20 +799,27 @@ export function recordPioneroAudioIngestEvent(state = {}, input = {}, options = 
     payload.track ||
       payload.publication ||
       payload.trackPublication ||
-      payload.firstArg
+      payload.firstArg,
+    options
   );
   const publicationDiagnostics = readPublicationDiagnosticCandidate(
     payload.publication ||
       payload.track ||
       payload.trackPublication ||
       payload.firstArg ||
-      payload.secondArg
+      payload.secondArg,
+    options
   );
+  const participantCandidate = payload.participant ||
+    payload.thirdArg ||
+    payload.secondArg ||
+    (
+      eventNameKey.includes("participant")
+        ? payload.firstArg
+        : null
+    );
   const participantDiagnostics = readParticipantDiagnosticCandidate(
-    payload.participant ||
-      payload.thirdArg ||
-      payload.secondArg ||
-      payload.firstArg
+    participantCandidate
   );
   const subscribedAudioPublication = Boolean(
     isAudioPublicationDiagnostic(publicationDiagnostics) &&
@@ -705,7 +874,7 @@ export function recordPioneroAudioIngestEvent(state = {}, input = {}, options = 
   };
 }
 
-export function snapshotPioneroRoomParticipants(state = {}, room = null) {
+export function snapshotPioneroRoomParticipants(state = {}, room = null, options = {}) {
   const safeState = safeStateObject(state);
   const currentAudioIngest = buildPioneroAudioIngestState(safeState.audioIngest);
   const remoteParticipants = collectionValues(room?.remoteParticipants);
@@ -726,7 +895,7 @@ export function snapshotPioneroRoomParticipants(state = {}, room = null) {
     }
 
     participantPublications(participant).forEach((publication) => {
-      const publicationDiagnostics = readPublicationDiagnosticCandidate(publication);
+      const publicationDiagnostics = readPublicationDiagnosticCandidate(publication, options);
 
       if (!publicationDiagnostics.looksLikePublication) return;
 
@@ -976,8 +1145,12 @@ export function buildPioneroLiveKitAgentRunnerState(input = {}) {
 
 export function createPioneroLiveKitAgentRunner(input = {}) {
   const {
+    AudioStream = null,
+    AudioStreamClass = null,
     RoomEvent = null,
     RoomClass = null,
+    TrackKind = null,
+    TrackSource = null,
     audioIngestEventNames = [],
     createAgentToken = createPioneroLiveKitAgentToken,
     createSttSession = null,
@@ -988,6 +1161,11 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
     speechGatewayFactory = null,
     trackAudioEventNames = [],
   } = input;
+  const AudioStreamCtor = AudioStreamClass || AudioStream;
+  const diagnosticOptions = {
+    TrackKind,
+    TrackSource,
+  };
 
   let room = null;
   let connected = false;
@@ -995,11 +1173,39 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
   let currentState = buildPioneroLiveKitAgentRunnerState({
     env,
     roomName,
-  });
+    });
   let cleanupAudioIngestListeners = [];
+  let audioStreamReaders = [];
+  const audioStreamTrackRefs = new WeakSet();
+  const audioStreamTrackKeys = new Set();
 
-  function updateAudioIngestFrame(frame) {
-    currentState = recordPioneroAudioIngestFrame(currentState, frame, { now });
+  function updateAudioIngestFrame(frame, options = {}) {
+    currentState = recordPioneroAudioIngestFrame(currentState, frame, {
+      now,
+      ...options,
+    });
+    return currentState;
+  }
+
+  function updateAudioStreamCounters({
+    openedDelta = 0,
+    readErrorsDelta = 0,
+    reasonCode = "",
+  } = {}) {
+    const currentAudioIngest = buildPioneroAudioIngestState(currentState.audioIngest);
+
+    currentState = {
+      ...safeStateObject(currentState),
+      audioIngest: {
+        ...currentAudioIngest,
+        audioStreamsOpened: currentAudioIngest.audioStreamsOpened + n(openedDelta),
+        audioStreamReadErrors:
+          currentAudioIngest.audioStreamReadErrors + n(readErrorsDelta),
+        lastAudioStreamReasonCode: reasonCode ||
+          currentAudioIngest.lastAudioStreamReasonCode,
+      },
+    };
+
     return currentState;
   }
 
@@ -1032,7 +1238,7 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
     } catch (err) {
       logger?.warn?.("pionero.livekit.agent_runner.stt_session_unavailable", {
         reasonCode: "stt_session_create_failed",
-        error: s(err?.message || err),
+        error: null,
       });
       setSttState({
         provider: "soniox",
@@ -1085,8 +1291,8 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
     };
   }
 
-  async function observeAudioFrame(frame) {
-    updateAudioIngestFrame(frame);
+  async function observeAudioFrame(frame, options = {}) {
+    updateAudioIngestFrame(frame, options);
 
     if (!sttSession) {
       return currentState;
@@ -1121,7 +1327,7 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
     } catch (err) {
       logger?.warn?.("pionero.livekit.agent_runner.stt_frame_failed", {
         reasonCode: "stt_session_frame_failed",
-        error: s(err?.message || err),
+        error: null,
       });
       setSttState({
         ...currentStt,
@@ -1143,15 +1349,153 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
     });
   }
 
+  function readAudioStreamTrackKey(track = {}) {
+    return s(
+      track.sid ||
+        track.trackSid ||
+        track.id ||
+        track.name ||
+        track.mediaStreamTrack?.id
+    );
+  }
+
+  function hasAudioStreamForTrack(track = {}) {
+    if (track && typeof track === "object") {
+      if (audioStreamTrackRefs.has(track)) return true;
+
+      const key = readAudioStreamTrackKey(track);
+      return key ? audioStreamTrackKeys.has(key) : false;
+    }
+
+    const key = s(track);
+    return key ? audioStreamTrackKeys.has(key) : true;
+  }
+
+  function markAudioStreamForTrack(track = {}) {
+    if (track && typeof track === "object") {
+      audioStreamTrackRefs.add(track);
+      const key = readAudioStreamTrackKey(track);
+
+      if (key) {
+        audioStreamTrackKeys.add(key);
+      }
+
+      return;
+    }
+
+    const key = s(track);
+
+    if (key) {
+      audioStreamTrackKeys.add(key);
+    }
+  }
+
+  async function readAudioStreamFrames(entry) {
+    try {
+      while (!entry.cancelled) {
+        const result = await entry.reader.read();
+
+        if (entry.cancelled) break;
+        if (!result || result.done) break;
+
+        const frame = result.value ?? result;
+
+        if (frame !== undefined && frame !== null) {
+          await observeAudioFrame(frame, { audioStreamFrame: true });
+        }
+      }
+    } catch {
+      if (!entry.cancelled) {
+        updateAudioStreamCounters({
+          readErrorsDelta: 1,
+          reasonCode: "audio_stream_read_failed",
+        });
+        logger?.warn?.("pionero.livekit.agent_runner.audio_stream_read_failed", {
+          reasonCode: "audio_stream_read_failed",
+          error: null,
+        });
+      }
+    }
+  }
+
+  function startAudioStreamForTrack(track = {}) {
+    if (typeof AudioStreamCtor !== "function") return;
+    if (!isAudioTrack(track, diagnosticOptions)) return;
+    if (hasAudioStreamForTrack(track)) return;
+
+    markAudioStreamForTrack(track);
+
+    try {
+      const stream = new AudioStreamCtor(track, {
+        sampleRate: 16000,
+        numChannels: 1,
+        frameSizeMs: 20,
+      });
+      const reader = stream?.getReader?.();
+
+      if (!reader || typeof reader.read !== "function") {
+        updateAudioStreamCounters({
+          readErrorsDelta: 1,
+          reasonCode: "audio_stream_reader_unavailable",
+        });
+        stream?.cancel?.();
+        return;
+      }
+
+      const entry = {
+        cancelled: false,
+        reader,
+        stream,
+      };
+
+      audioStreamReaders.push(entry);
+      updateAudioStreamCounters({
+        openedDelta: 1,
+        reasonCode: "audio_stream_opened",
+      });
+      entry.promise = readAudioStreamFrames(entry);
+    } catch {
+      updateAudioStreamCounters({
+        readErrorsDelta: 1,
+        reasonCode: "audio_stream_open_failed",
+      });
+      logger?.warn?.("pionero.livekit.agent_runner.audio_stream_open_failed", {
+        reasonCode: "audio_stream_open_failed",
+        error: null,
+      });
+    }
+  }
+
+  async function detachAudioStreamReaders() {
+    const readers = audioStreamReaders;
+    audioStreamReaders = [];
+
+    await Promise.all(readers.map(async (entry) => {
+      entry.cancelled = true;
+
+      try {
+        await entry.reader?.cancel?.();
+      } catch {
+        // Audio stream cleanup should not block runner teardown.
+      }
+
+      try {
+        await entry.stream?.cancel?.();
+      } catch {
+        // Audio stream cleanup should not block runner teardown.
+      }
+    }));
+  }
+
   function attachTrackAudioListeners(track) {
-    if (!isAudioTrack(track)) return;
+    if (!isAudioTrack(track, diagnosticOptions)) return;
 
     readTrackAudioEventNames({ trackAudioEventNames }).forEach((eventName) => {
       addEventListener(track, eventName, (...args) => {
         currentState = recordPioneroAudioIngestEvent(currentState, {
           eventName,
-        });
-        const frame = readFrameCandidate(args);
+        }, diagnosticOptions);
+        const frame = readFrameCandidate(args, diagnosticOptions);
 
         if (frame) {
           return observeAudioFrame(frame);
@@ -1173,11 +1517,18 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
           firstArg: args[0],
           secondArg: args[1],
           thirdArg: args[2],
-        });
-        currentState = snapshotPioneroRoomParticipants(currentState, targetRoom);
+        }, diagnosticOptions);
+        currentState = snapshotPioneroRoomParticipants(
+          currentState,
+          targetRoom,
+          diagnosticOptions
+        );
         attachTrackAudioListeners(args[0]);
+        if (s(eventName).toLowerCase().includes("tracksubscribed")) {
+          startAudioStreamForTrack(args[0]);
+        }
 
-        const frame = readFrameCandidate(args);
+        const frame = readFrameCandidate(args, diagnosticOptions);
 
         if (frame) {
           return observeAudioFrame(frame);
@@ -1212,17 +1563,19 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
         ? err.plan
         : buildPioneroLiveKitAgentPlan({ roomName, env });
 
-      logger?.warn?.("pionero.livekit.agent_runner.token_unavailable", {
-        reasonCode: s(err?.code || err?.message, "livekit_config_missing"),
-      });
+        const tokenReasonCode = s(err?.code, "livekit_config_missing");
 
-      currentState = buildPioneroLiveKitAgentRunnerState({
-        plan,
-        status: "blocked",
-        configured: false,
-        networkIo: false,
-        reasonCode: s(err?.code || err?.message, "livekit_config_missing"),
-      });
+        logger?.warn?.("pionero.livekit.agent_runner.token_unavailable", {
+          reasonCode: tokenReasonCode,
+        });
+
+        currentState = buildPioneroLiveKitAgentRunnerState({
+          plan,
+          status: "blocked",
+          configured: false,
+          networkIo: false,
+          reasonCode: tokenReasonCode,
+        });
 
       return currentState;
     }
@@ -1280,7 +1633,7 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
     } catch (err) {
       logger?.error?.("pionero.livekit.agent_runner.connect_failed", {
         reasonCode: "livekit_room_connect_failed",
-        error: s(err?.message || err),
+        error: null,
       });
 
       currentState = buildPioneroLiveKitAgentRunnerState({
@@ -1317,6 +1670,7 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
 
   async function stop() {
     detachAudioIngestListeners();
+    await detachAudioStreamReaders();
 
     if (room && connected) {
       try {
@@ -1324,7 +1678,7 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
       } catch (err) {
         logger?.warn?.("pionero.livekit.agent_runner.disconnect_failed", {
           reasonCode: "livekit_room_disconnect_failed",
-          error: s(err?.message || err),
+          error: null,
         });
       }
     }
@@ -1372,7 +1726,11 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
   }
 
   function snapshotDiagnostics() {
-    currentState = snapshotPioneroRoomParticipants(currentState, room);
+    currentState = snapshotPioneroRoomParticipants(
+      currentState,
+      room,
+      diagnosticOptions
+    );
     return currentState;
   }
 

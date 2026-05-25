@@ -88,6 +88,8 @@ Diagnostics are limited to event counts, frame and byte counters, and safe track
 
 These diagnostics do not prove STT readiness. They only prove the ingest skeleton observed LiveKit room or track activity before a real STT/LLM/TTS loop is enabled.
 
+The runner can also open the `@livekit/rtc-node` `AudioStream` reader for subscribed audio tracks. The monitor reports `audioStreamsOpened`, `audioStreamFramesObserved`, `audioStreamReadErrors`, and `lastAudioStreamReasonCode` so the frame reader can be checked without logging raw audio.
+
 ## Live Monitor Troubleshooting
 
 Use the live audio monitor counters to locate the first missing step:
@@ -95,7 +97,8 @@ Use the live audio monitor counters to locate the first missing step:
 - `remoteParticipantsObserved = 0`: the browser is not in the same room or is not connected.
 - `remoteParticipantsObserved > 0` and `audioPublicationsObserved = 0`: the browser connected, but microphone audio was not published.
 - `audioPublicationsObserved > 0` and `subscribedAudioTracksObserved = 0`: the backend sees the publication, but subscription or RoomEvent mapping needs attention.
-- `subscribedAudioTracksObserved > 0` and `framesObserved = 0`: the backend subscribed, but audio frame extraction mapping needs attention.
+- `subscribedAudioTracksObserved > 0` and `audioStreamsOpened = 0`: the backend subscribed, but the rtc-node `AudioStream` export or runner wiring needs attention.
+- `audioStreamsOpened > 0` and `audioStreamFramesObserved = 0`: the reader opened, but rtc-node did not yield audio frames during the monitor window.
 - `framesObserved > 0`: the ingest skeleton is ready for Soniox STT wiring.
 
 ## Environment

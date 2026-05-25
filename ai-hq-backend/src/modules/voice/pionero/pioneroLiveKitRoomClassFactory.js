@@ -63,7 +63,42 @@ function readRoomEvent(moduleNamespace = {}) {
   return null;
 }
 
-function decorateRoomClass(RoomClass, RoomEvent = null) {
+function readOptionalFunctionExport(moduleNamespace = {}, exportName = "") {
+  if (typeof moduleNamespace?.[exportName] === "function") {
+    return moduleNamespace[exportName];
+  }
+
+  if (typeof moduleNamespace?.default?.[exportName] === "function") {
+    return moduleNamespace.default[exportName];
+  }
+
+  return null;
+}
+
+function readOptionalObjectExport(moduleNamespace = {}, exportName = "") {
+  if (moduleNamespace?.[exportName] && typeof moduleNamespace[exportName] === "object") {
+    return moduleNamespace[exportName];
+  }
+
+  if (
+    moduleNamespace?.default?.[exportName] &&
+    typeof moduleNamespace.default[exportName] === "object"
+  ) {
+    return moduleNamespace.default[exportName];
+  }
+
+  return null;
+}
+
+function decorateRoomClass(
+  RoomClass,
+  {
+    RoomEvent = null,
+    AudioStream = null,
+    TrackKind = null,
+    TrackSource = null,
+  } = {}
+) {
   if (typeof RoomClass !== "function") return null;
 
   try {
@@ -75,6 +110,18 @@ function decorateRoomClass(RoomClass, RoomEvent = null) {
       RoomEvent: {
         configurable: true,
         value: RoomEvent,
+      },
+      AudioStream: {
+        configurable: true,
+        value: AudioStream,
+      },
+      TrackKind: {
+        configurable: true,
+        value: TrackKind,
+      },
+      TrackSource: {
+        configurable: true,
+        value: TrackSource,
       },
     });
   } catch {
@@ -122,6 +169,9 @@ export function createPioneroLiveKitRoomClassFactory({
       const moduleNamespace = await importer(moduleName);
       const RoomClass = readRoomClass(moduleNamespace);
       const RoomEvent = readRoomEvent(moduleNamespace);
+      const AudioStream = readOptionalFunctionExport(moduleNamespace, "AudioStream");
+      const TrackKind = readOptionalObjectExport(moduleNamespace, "TrackKind");
+      const TrackSource = readOptionalObjectExport(moduleNamespace, "TrackSource");
 
       if (!RoomClass) {
         logWarn(logger, "pionero.livekit.room_class_factory.invalid_module", {
@@ -133,7 +183,12 @@ export function createPioneroLiveKitRoomClassFactory({
         return null;
       }
 
-      return decorateRoomClass(RoomClass, RoomEvent);
+      return decorateRoomClass(RoomClass, {
+        RoomEvent,
+        AudioStream,
+        TrackKind,
+        TrackSource,
+      });
     } catch {
       logWarn(logger, "pionero.livekit.room_class_factory.import_failed", {
         enabled,

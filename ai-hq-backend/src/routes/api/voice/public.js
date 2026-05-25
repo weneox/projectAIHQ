@@ -1881,6 +1881,9 @@ function readPioneroLiveKitRoomClient(value = null) {
     return {
       RoomClass: value,
       RoomEvent: value.RoomEvent || null,
+      AudioStream: value.AudioStream || null,
+      TrackKind: value.TrackKind || null,
+      TrackSource: value.TrackSource || null,
     };
   }
 
@@ -1892,12 +1895,18 @@ function readPioneroLiveKitRoomClient(value = null) {
           ? value.Room
           : null,
       RoomEvent: value.RoomEvent || null,
+      AudioStream: value.AudioStream || null,
+      TrackKind: value.TrackKind || null,
+      TrackSource: value.TrackSource || null,
     };
   }
 
   return {
     RoomClass: null,
     RoomEvent: null,
+    AudioStream: null,
+    TrackKind: null,
+    TrackSource: null,
   };
 }
 
@@ -1908,11 +1917,14 @@ async function readPioneroLiveKitRouteRoomClient({
   pioneroLiveKitRoomClassFactory = null,
 } = {}) {
   if (typeof pioneroLiveKitRoomClassFactory !== "function") {
-    return {
-      RoomClass: null,
-      RoomEvent: null,
-    };
-  }
+      return {
+        RoomClass: null,
+        RoomEvent: null,
+        AudioStream: null,
+        TrackKind: null,
+        TrackSource: null,
+      };
+    }
 
   try {
     const roomClient = await pioneroLiveKitRoomClassFactory({
@@ -1929,11 +1941,14 @@ async function readPioneroLiveKitRouteRoomClient({
       });
 
       return {
-      RoomClass: null,
-      RoomEvent: null,
-    };
+        RoomClass: null,
+        RoomEvent: null,
+        AudioStream: null,
+        TrackKind: null,
+        TrackSource: null,
+      };
+    }
   }
-}
 
 async function handlePioneroLiveKitAgentStartPlan(
   req,
@@ -1944,7 +1959,13 @@ async function handlePioneroLiveKitAgentStartPlan(
 
   try {
     const roomName = req.body?.roomName || req.query?.roomName;
-    const { RoomClass, RoomEvent } = await readPioneroLiveKitRouteRoomClient({
+    const {
+      RoomClass,
+      RoomEvent,
+      AudioStream,
+      TrackKind,
+      TrackSource,
+    } = await readPioneroLiveKitRouteRoomClient({
       req,
       roomName,
       logger,
@@ -1955,6 +1976,9 @@ async function handlePioneroLiveKitAgentStartPlan(
       logger,
       ...(RoomClass ? { RoomClass } : {}),
       ...(RoomEvent ? { RoomEvent } : {}),
+      ...(AudioStream ? { AudioStream } : {}),
+      ...(TrackKind ? { TrackKind } : {}),
+      ...(TrackSource ? { TrackSource } : {}),
     });
 
     return ok(res, state);
