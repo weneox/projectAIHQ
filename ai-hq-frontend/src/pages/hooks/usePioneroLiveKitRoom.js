@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useRef, useState } from "react";
 import { Room, RoomEvent, createLocalAudioTrack } from "livekit-client";
 
 import {
   createPioneroLiveKitSession as defaultCreatePioneroLiveKitSession,
+  getPioneroLiveKitAgentStatus as defaultGetPioneroLiveKitAgentStatus,
   startPioneroLiveKitAgentPlan as defaultStartPioneroLiveKitAgentPlan,
+  stopPioneroLiveKitAgentPlan as defaultStopPioneroLiveKitAgentPlan,
 } from "../../api/voice.js";
 
 const PIONERO_LIVEKIT_ROOM_NAME = "pionero-browser-test";
@@ -201,7 +203,9 @@ function readErrorMessage(err, fallback = "pionero_livekit_failed", sensitiveVal
 
 export default function usePioneroLiveKitRoom({
   createPioneroLiveKitSession = defaultCreatePioneroLiveKitSession,
+  getPioneroLiveKitAgentStatus = defaultGetPioneroLiveKitAgentStatus,
   startPioneroLiveKitAgentPlan = defaultStartPioneroLiveKitAgentPlan,
+  stopPioneroLiveKitAgentPlan = defaultStopPioneroLiveKitAgentPlan,
 } = {}) {
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
@@ -247,6 +251,7 @@ export default function usePioneroLiveKitRoom({
   const [agentTtsReasonCode, setAgentTtsReasonCode] = useState("");
 
   const localMicTrackRef = useRef(null);
+  const runtimeRoomNameRef = useRef("");
   const mountedRef = useRef(false);
   const roomListenersRef = useRef(null);
   const roomRef = useRef(null);
@@ -358,6 +363,41 @@ export default function usePioneroLiveKitRoom({
     });
   }, [setSafeAgentState]);
 
+  const refreshAgentStatus = useCallback(async () => {
+    const nextRoomName = s(runtimeRoomNameRef.current || roomName);
+
+    if (!nextRoomName) {
+      return {
+        ok: false,
+        status: "idle",
+      };
+    }
+
+    try {
+      const agentState = await getPioneroLiveKitAgentStatus({
+        roomName: nextRoomName,
+      });
+      setSafeAgentState(readAgentState(agentState));
+
+      return {
+        ok: true,
+        status: s(agentState?.status, "unknown"),
+      };
+    } catch (err) {
+      setSafeAgentState({
+        agentStatus: "warning",
+        agentReasonCode: readErrorMessage(err, "pionero_agent_status_failed"),
+        agentNetworkIo: false,
+        agentReady: false,
+      });
+
+      return {
+        ok: false,
+        status: "warning",
+      };
+    }
+  }, [getPioneroLiveKitAgentStatus, roomName, setSafeAgentState]);
+
   const detachRoomListeners = useCallback(() => {
     const listeners = roomListenersRef.current;
 
@@ -380,6 +420,7 @@ export default function usePioneroLiveKitRoom({
   const disconnect = useCallback(async ({ updateState = true } = {}) => {
     const room = roomRef.current;
     const localMicTrack = localMicTrackRef.current;
+    const runtimeRoomName = s(runtimeRoomNameRef.current);
 
     if (updateState && (room || localMicTrack)) {
       setSafeStatus("stopping");
@@ -401,6 +442,18 @@ export default function usePioneroLiveKitRoom({
       // Ignore local track stop failures during teardown.
     }
 
+    if (updateState && runtimeRoomName) {
+      try {
+        await stopPioneroLiveKitAgentPlan({
+          roomName: runtimeRoomName,
+        });
+      } catch {
+        // Runtime stop is best-effort; local teardown must still finish.
+      }
+    }
+
+    runtimeRoomNameRef.current = "";
+
     if (updateState && mountedRef.current) {
       setError("");
       setSession(null);
@@ -413,7 +466,12 @@ export default function usePioneroLiveKitRoom({
     } else {
       statusRef.current = "idle";
     }
-  }, [clearAgentState, detachRoomListeners, setSafeStatus]);
+  }, [
+    clearAgentState,
+    detachRoomListeners,
+    setSafeStatus,
+    stopPioneroLiveKitAgentPlan,
+  ]);
 
   const connect = useCallback(async () => {
     if (!["idle", "error"].includes(statusRef.current)) {
@@ -450,6 +508,7 @@ export default function usePioneroLiveKitRoom({
       const safeSession = redactSessionSecrets(result);
       const nextRoomName = s(safeSession?.roomName || PIONERO_LIVEKIT_ROOM_NAME);
       const nextIdentity = s(safeSession?.identity);
+      runtimeRoomNameRef.current = nextRoomName;
       const nextRoom = new Room();
       const handleParticipantChanged = () => setSafeParticipants(nextRoom);
 
@@ -583,6 +642,7 @@ export default function usePioneroLiveKitRoom({
     participants,
     connect,
     disconnect,
+    refreshAgentStatus,
     localMicEnabled,
     agentStatus,
     agentReasonCode,
@@ -621,3 +681,4 @@ export default function usePioneroLiveKitRoom({
     agentTtsReasonCode,
   };
 }
+
