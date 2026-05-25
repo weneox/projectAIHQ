@@ -30,6 +30,12 @@ This check only imports the configured module, resolves a Room class export, and
 
 The real dependency must be added in a separate PR only after this module-shape check passes in the target environment.
 
+## Installed Backend Dependency
+
+`@livekit/rtc-node` is installed for backend RoomClass loading. The Pionero RoomClass path is still disabled by default, and enabling it still requires setting `PIONERO_LIVEKIT_ROOM_CLIENT_ENABLED=1`.
+
+Rollback remains the same: set `PIONERO_LIVEKIT_ROOM_CLIENT_ENABLED=0` to return to the no-default-network planned state.
+
 ## Environment
 
 LiveKit token and room planning use:

@@ -37,6 +37,7 @@
   },
   "dependencies": {
     "@aihq/shared-contracts": "1.0.0",
+    "@livekit/rtc-node": "0.13.28",
     "archiver": "^7.0.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
