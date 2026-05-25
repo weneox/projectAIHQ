@@ -88,6 +88,14 @@ function buildAgentPlan(overrides = {}) {
     networkIo: false,
     reasonCode: "livekit_room_client_not_configured",
     roomName: "pionero-browser-test",
+    audioIngest: {
+      enabled: false,
+      status: "idle",
+      framesObserved: 0,
+      bytesObserved: 0,
+      lastObservedAt: "",
+      reasonCode: "livekit_room_client_not_configured",
+    },
     readiness: {
       agentParticipantReady: false,
       reasonCode: "pionero_agent_runner_not_started",
@@ -112,6 +120,17 @@ describe("usePioneroLiveKitRoom", () => {
         buildAgentPlan({
           apiSecret: "agent-secret-test",
           token: "agent-token-test",
+          rawAudio: "raw-audio-secret",
+          audioIngest: {
+            enabled: true,
+            status: "audio_observed",
+            framesObserved: 2,
+            bytesObserved: 512,
+            lastObservedAt: "2026-01-02T03:04:05.000Z",
+            reasonCode: "",
+            rawAudio: "nested-raw-audio-secret",
+            token: "nested-agent-token-test",
+          },
         })
       );
     mockLiveKit.createLocalAudioTrack.mockResolvedValue(localMicTrack);
@@ -160,10 +179,20 @@ describe("usePioneroLiveKitRoom", () => {
     );
     expect(result.current.agentNetworkIo).toBe(false);
     expect(result.current.agentReady).toBe(false);
+    expect(result.current.agentAudioIngestStatus).toBe("audio_observed");
+    expect(result.current.agentAudioFramesObserved).toBe(2);
+    expect(result.current.agentAudioBytesObserved).toBe(512);
+    expect(result.current.agentAudioLastObservedAt).toBe(
+      "2026-01-02T03:04:05.000Z"
+    );
+    expect(result.current.agentAudioReasonCode).toBe("");
     expect(result.current.session.token).toBeUndefined();
     expect(JSON.stringify(result.current.session)).not.toContain("token-test");
     expect(JSON.stringify(result.current)).not.toContain("agent-token-test");
     expect(JSON.stringify(result.current)).not.toContain("agent-secret-test");
+    expect(JSON.stringify(result.current)).not.toContain("raw-audio-secret");
+    expect(JSON.stringify(result.current)).not.toContain("nested-raw-audio-secret");
+    expect(JSON.stringify(result.current)).not.toContain("nested-agent-token-test");
   });
 
   it("updates participants from LiveKit room events", async () => {
@@ -242,6 +271,11 @@ describe("usePioneroLiveKitRoom", () => {
     expect(result.current.agentReasonCode).toBe("");
     expect(result.current.agentNetworkIo).toBe(false);
     expect(result.current.agentReady).toBe(false);
+    expect(result.current.agentAudioIngestStatus).toBe("idle");
+    expect(result.current.agentAudioFramesObserved).toBe(0);
+    expect(result.current.agentAudioBytesObserved).toBe(0);
+    expect(result.current.agentAudioLastObservedAt).toBe("");
+    expect(result.current.agentAudioReasonCode).toBe("");
   });
 
   it("keeps the browser room live when the agent start-plan fails", async () => {
@@ -274,6 +308,13 @@ describe("usePioneroLiveKitRoom", () => {
     expect(result.current.agentReasonCode).toMatch(/agent plan failed/i);
     expect(result.current.agentNetworkIo).toBe(false);
     expect(result.current.agentReady).toBe(false);
+    expect(result.current.agentAudioIngestStatus).toBe("error");
+    expect(result.current.agentAudioFramesObserved).toBe(0);
+    expect(result.current.agentAudioBytesObserved).toBe(0);
+    expect(result.current.agentAudioLastObservedAt).toBe("");
+    expect(result.current.agentAudioReasonCode).toBe(
+      "pionero_agent_start_plan_failed"
+    );
   });
 
   it("surfaces session creation failures without creating a room", async () => {

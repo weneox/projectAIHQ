@@ -22,9 +22,25 @@ const SESSION_SECRET_KEYS = new Set([
   "jwt",
   "token",
 ]);
+const AUDIO_INGEST_STATUSES = new Set([
+  "idle",
+  "waiting_for_audio",
+  "audio_observed",
+  "error",
+]);
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim() || fallback;
+}
+
+function n(value, fallback = 0) {
+  const numberValue = Number(value);
+
+  if (!Number.isFinite(numberValue) || numberValue < 0) {
+    return fallback;
+  }
+
+  return Math.floor(numberValue);
 }
 
 function redactSessionSecrets(value) {
@@ -56,6 +72,21 @@ function readRoomParticipants(room) {
   return Array.from(remoteParticipants.values()).map(readParticipantSnapshot);
 }
 
+function readAgentAudioIngestState(audioIngest = {}) {
+  const payload = audioIngest && typeof audioIngest === "object" && !Array.isArray(audioIngest)
+    ? audioIngest
+    : {};
+  const status = s(payload.status, "idle");
+
+  return {
+    agentAudioIngestStatus: AUDIO_INGEST_STATUSES.has(status) ? status : "idle",
+    agentAudioFramesObserved: n(payload.framesObserved),
+    agentAudioBytesObserved: n(payload.bytesObserved),
+    agentAudioLastObservedAt: s(payload.lastObservedAt),
+    agentAudioReasonCode: s(payload.reasonCode),
+  };
+}
+
 function readAgentState(result = {}) {
   const readiness = result?.readiness || {};
   const agentStatus = s(result?.status, "unknown");
@@ -73,6 +104,7 @@ function readAgentState(result = {}) {
       result?.agentParticipantReady === true ||
       readiness?.agentParticipantReady === true ||
       agentStatus === "connected",
+    ...readAgentAudioIngestState(result?.audioIngest),
   };
 }
 
@@ -104,6 +136,11 @@ export default function usePioneroLiveKitRoom({
   const [agentReasonCode, setAgentReasonCode] = useState("");
   const [agentNetworkIo, setAgentNetworkIo] = useState(false);
   const [agentReady, setAgentReady] = useState(false);
+  const [agentAudioIngestStatus, setAgentAudioIngestStatus] = useState("idle");
+  const [agentAudioFramesObserved, setAgentAudioFramesObserved] = useState(0);
+  const [agentAudioBytesObserved, setAgentAudioBytesObserved] = useState(0);
+  const [agentAudioLastObservedAt, setAgentAudioLastObservedAt] = useState("");
+  const [agentAudioReasonCode, setAgentAudioReasonCode] = useState("");
 
   const localMicTrackRef = useRef(null);
   const mountedRef = useRef(false);
@@ -136,6 +173,11 @@ export default function usePioneroLiveKitRoom({
     setAgentReasonCode(s(nextAgentState.agentReasonCode));
     setAgentNetworkIo(nextAgentState.agentNetworkIo === true);
     setAgentReady(nextAgentState.agentReady === true);
+    setAgentAudioIngestStatus(s(nextAgentState.agentAudioIngestStatus, "idle"));
+    setAgentAudioFramesObserved(n(nextAgentState.agentAudioFramesObserved));
+    setAgentAudioBytesObserved(n(nextAgentState.agentAudioBytesObserved));
+    setAgentAudioLastObservedAt(s(nextAgentState.agentAudioLastObservedAt));
+    setAgentAudioReasonCode(s(nextAgentState.agentAudioReasonCode));
   }, []);
 
   const clearAgentState = useCallback(() => {
@@ -144,6 +186,11 @@ export default function usePioneroLiveKitRoom({
       agentReasonCode: "",
       agentNetworkIo: false,
       agentReady: false,
+      agentAudioIngestStatus: "idle",
+      agentAudioFramesObserved: 0,
+      agentAudioBytesObserved: 0,
+      agentAudioLastObservedAt: "",
+      agentAudioReasonCode: "",
     });
   }, [setSafeAgentState]);
 
@@ -286,6 +333,11 @@ export default function usePioneroLiveKitRoom({
           ),
           agentNetworkIo: false,
           agentReady: false,
+          agentAudioIngestStatus: "error",
+          agentAudioFramesObserved: 0,
+          agentAudioBytesObserved: 0,
+          agentAudioLastObservedAt: "",
+          agentAudioReasonCode: "pionero_agent_start_plan_failed",
         });
       }
 
@@ -346,5 +398,10 @@ export default function usePioneroLiveKitRoom({
     agentReasonCode,
     agentNetworkIo,
     agentReady,
+    agentAudioIngestStatus,
+    agentAudioFramesObserved,
+    agentAudioBytesObserved,
+    agentAudioLastObservedAt,
+    agentAudioReasonCode,
   };
 }

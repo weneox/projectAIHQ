@@ -59,6 +59,11 @@ function buildPioneroHook(overrides = {}) {
     agentReasonCode: "",
     agentNetworkIo: false,
     agentReady: false,
+    agentAudioIngestStatus: "idle",
+    agentAudioFramesObserved: 0,
+    agentAudioBytesObserved: 0,
+    agentAudioLastObservedAt: "",
+    agentAudioReasonCode: "",
     ...overrides,
   };
 }
@@ -108,10 +113,15 @@ describe("BrowserVoiceCall", () => {
     expect(getByText("Three voice lanes")).toBeTruthy();
     expect(getByText("GPT Realtime WebRTC")).toBeTruthy();
     expect(getByText("Pionero LiveKit realtime lane")).toBeTruthy();
-    expect(getByText("Agent start-plan only; full AI loop is not running yet.")).toBeTruthy();
+    expect(getByText("Agent start-plan and ingest skeleton only; full AI loop is not running yet.")).toBeTruthy();
     expect(getByText("Agent start-plan status")).toBeTruthy();
     expect(getByText("Agent reason code")).toBeTruthy();
     expect(getByText("Agent network IO")).toBeTruthy();
+    expect(getByText("Audio ingest status")).toBeTruthy();
+    expect(getByText("Frames observed")).toBeTruthy();
+    expect(getByText("Bytes observed")).toBeTruthy();
+    expect(getByText("Last observed")).toBeTruthy();
+    expect(getByText("Audio reason code")).toBeTruthy();
     expect(getByText("Speech Bridge / Soniox lane")).toBeTruthy();
     expect(getByText("Soniox readiness")).toBeTruthy();
     expect(getByLabelText("Speech bridge text")).toBeTruthy();
@@ -164,6 +174,11 @@ describe("BrowserVoiceCall", () => {
       agentReasonCode: "livekit_room_client_not_configured",
       agentNetworkIo: false,
       agentReady: false,
+      agentAudioIngestStatus: "audio_observed",
+      agentAudioFramesObserved: 3,
+      agentAudioBytesObserved: 1024,
+      agentAudioLastObservedAt: "2026-01-02T03:04:05.000Z",
+      agentAudioReasonCode: "audio_observed_for_test",
     });
     useBrowserVoiceCall.mockReturnValue(hook);
     usePioneroLiveKitRoom.mockReturnValue(pioneroHook);
@@ -172,6 +187,11 @@ describe("BrowserVoiceCall", () => {
 
     expect(getByText("planned (not ready)")).toBeTruthy();
     expect(getByText("livekit_room_client_not_configured")).toBeTruthy();
+    expect(getByText("audio_observed")).toBeTruthy();
+    expect(getByText("3")).toBeTruthy();
+    expect(getByText("1024")).toBeTruthy();
+    expect(getByText("2026-01-02T03:04:05.000Z")).toBeTruthy();
+    expect(getByText("audio_observed_for_test")).toBeTruthy();
 
     fireEvent.click(getByText("End GPT Realtime call"));
     expect(hook.stopCall).toHaveBeenCalledTimes(1);
