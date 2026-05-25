@@ -79,6 +79,10 @@ export default function BrowserVoiceCall() {
     connect: connectPioneroLiveKit,
     disconnect: disconnectPioneroLiveKit,
     localMicEnabled: pioneroLiveKitLocalMicEnabled,
+    agentStatus: pioneroLiveKitAgentStatus,
+    agentReasonCode: pioneroLiveKitAgentReasonCode,
+    agentNetworkIo: pioneroLiveKitAgentNetworkIo,
+    agentReady: pioneroLiveKitAgentReady,
   } = usePioneroLiveKitRoom();
 
   const [speechBridgeDraftText, setSpeechBridgeDraftText] = useState("");
@@ -137,6 +141,13 @@ export default function BrowserVoiceCall() {
   const pioneroLiveKitMicLabel = pioneroLiveKitLocalMicEnabled
     ? "published"
     : "idle";
+  const pioneroLiveKitAgentStatusLabel = s(pioneroLiveKitAgentStatus, "idle");
+  const pioneroLiveKitAgentReadyLabel = pioneroLiveKitAgentReady
+    ? "ready"
+    : "not ready";
+  const pioneroLiveKitAgentNetworkIoLabel = pioneroLiveKitAgentNetworkIo
+    ? "yes"
+    : "no";
 
   const refreshSpeechReadiness = useCallback(async () => {
     setSpeechReadinessStatus("loading");
@@ -324,6 +335,37 @@ export default function BrowserVoiceCall() {
             <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">Mic</div>
             <div className="mt-1 text-sm font-semibold text-text">
               {pioneroLiveKitMicLabel}
+            </div>
+          </div>
+        </div>
+
+        <p className="mt-3 text-xs text-text-muted">
+          Agent start-plan only; full AI loop is not running yet.
+        </p>
+
+        <div className="mt-3 grid gap-3 md:grid-cols-3">
+          <div className="rounded-2xl border border-line-soft bg-surface-subtle p-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              Agent start-plan status
+            </div>
+            <div className="mt-1 text-sm font-semibold text-text">
+              {pioneroLiveKitAgentStatusLabel} ({pioneroLiveKitAgentReadyLabel})
+            </div>
+          </div>
+          <div className="rounded-2xl border border-line-soft bg-surface-subtle p-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              Agent reason code
+            </div>
+            <div className="mt-1 text-sm font-semibold text-text">
+              {s(pioneroLiveKitAgentReasonCode, "not requested")}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-line-soft bg-surface-subtle p-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              Agent network IO
+            </div>
+            <div className="mt-1 text-sm font-semibold text-text">
+              {pioneroLiveKitAgentNetworkIoLabel}
             </div>
           </div>
         </div>

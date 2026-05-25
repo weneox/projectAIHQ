@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Room, RoomEvent, createLocalAudioTrack } from "livekit-client";
 
-import { createPioneroLiveKitSession as defaultCreatePioneroLiveKitSession } from "../../api/voice.js";
+import {
+  createPioneroLiveKitSession as defaultCreatePioneroLiveKitSession,
+  startPioneroLiveKitAgentPlan as defaultStartPioneroLiveKitAgentPlan,
+} from "../../api/voice.js";
 
 const PIONERO_LIVEKIT_ROOM_NAME = "pionero-browser-test";
 const PIONERO_LIVEKIT_SESSION_REQUEST = {
@@ -53,6 +56,26 @@ function readRoomParticipants(room) {
   return Array.from(remoteParticipants.values()).map(readParticipantSnapshot);
 }
 
+function readAgentState(result = {}) {
+  const readiness = result?.readiness || {};
+  const agentStatus = s(result?.status, "unknown");
+  const agentReasonCode = s(
+    result?.reasonCode || readiness?.reasonCode,
+    agentStatus === "unknown" ? "pionero_agent_start_plan_unknown" : ""
+  );
+
+  return {
+    agentStatus,
+    agentReasonCode,
+    agentNetworkIo: result?.networkIo === true,
+    agentReady:
+      result?.agentReady === true ||
+      result?.agentParticipantReady === true ||
+      readiness?.agentParticipantReady === true ||
+      agentStatus === "connected",
+  };
+}
+
 function readErrorMessage(err, fallback = "pionero_livekit_failed", sensitiveValues = []) {
   let message = s(err?.message || err, fallback);
 
@@ -68,6 +91,7 @@ function readErrorMessage(err, fallback = "pionero_livekit_failed", sensitiveVal
 
 export default function usePioneroLiveKitRoom({
   createPioneroLiveKitSession = defaultCreatePioneroLiveKitSession,
+  startPioneroLiveKitAgentPlan = defaultStartPioneroLiveKitAgentPlan,
 } = {}) {
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
@@ -76,6 +100,10 @@ export default function usePioneroLiveKitRoom({
   const [identity, setIdentity] = useState("");
   const [participants, setParticipants] = useState([]);
   const [localMicEnabled, setLocalMicEnabled] = useState(false);
+  const [agentStatus, setAgentStatus] = useState("idle");
+  const [agentReasonCode, setAgentReasonCode] = useState("");
+  const [agentNetworkIo, setAgentNetworkIo] = useState(false);
+  const [agentReady, setAgentReady] = useState(false);
 
   const localMicTrackRef = useRef(null);
   const mountedRef = useRef(false);
@@ -100,6 +128,24 @@ export default function usePioneroLiveKitRoom({
 
     return nextParticipants;
   }, []);
+
+  const setSafeAgentState = useCallback((nextAgentState = {}) => {
+    if (!mountedRef.current) return;
+
+    setAgentStatus(s(nextAgentState.agentStatus, "idle"));
+    setAgentReasonCode(s(nextAgentState.agentReasonCode));
+    setAgentNetworkIo(nextAgentState.agentNetworkIo === true);
+    setAgentReady(nextAgentState.agentReady === true);
+  }, []);
+
+  const clearAgentState = useCallback(() => {
+    setSafeAgentState({
+      agentStatus: "idle",
+      agentReasonCode: "",
+      agentNetworkIo: false,
+      agentReady: false,
+    });
+  }, [setSafeAgentState]);
 
   const detachRoomListeners = useCallback(() => {
     const listeners = roomListenersRef.current;
@@ -151,11 +197,12 @@ export default function usePioneroLiveKitRoom({
       setIdentity("");
       setParticipants([]);
       setLocalMicEnabled(false);
+      clearAgentState();
       setSafeStatus("idle");
     } else {
       statusRef.current = "idle";
     }
-  }, [detachRoomListeners, setSafeStatus]);
+  }, [clearAgentState, detachRoomListeners, setSafeStatus]);
 
   const connect = useCallback(async () => {
     if (!["idle", "error"].includes(statusRef.current)) {
@@ -176,6 +223,7 @@ export default function usePioneroLiveKitRoom({
       setIdentity("");
       setParticipants([]);
       setLocalMicEnabled(false);
+      clearAgentState();
     }
 
     try {
@@ -223,6 +271,24 @@ export default function usePioneroLiveKitRoom({
 
       setSafeStatus("live");
 
+      try {
+        const agentPlan = await startPioneroLiveKitAgentPlan({
+          roomName: nextRoomName,
+        });
+        setSafeAgentState(readAgentState(agentPlan));
+      } catch (agentErr) {
+        setSafeAgentState({
+          agentStatus: "warning",
+          agentReasonCode: readErrorMessage(
+            agentErr,
+            "pionero_agent_start_plan_failed",
+            [sensitiveToken]
+          ),
+          agentNetworkIo: false,
+          agentReady: false,
+        });
+      }
+
       return {
         ok: true,
         status: "live",
@@ -236,6 +302,7 @@ export default function usePioneroLiveKitRoom({
         setIdentity("");
         setParticipants([]);
         setLocalMicEnabled(false);
+        clearAgentState();
         setError(readErrorMessage(err, "pionero_livekit_failed", [sensitiveToken]));
       }
 
@@ -247,10 +314,13 @@ export default function usePioneroLiveKitRoom({
       };
     }
   }, [
+    clearAgentState,
     createPioneroLiveKitSession,
     disconnect,
     setSafeParticipants,
+    setSafeAgentState,
     setSafeStatus,
+    startPioneroLiveKitAgentPlan,
   ]);
 
   useEffect(() => {
@@ -272,5 +342,9 @@ export default function usePioneroLiveKitRoom({
     connect,
     disconnect,
     localMicEnabled,
+    agentStatus,
+    agentReasonCode,
+    agentNetworkIo,
+    agentReady,
   };
 }

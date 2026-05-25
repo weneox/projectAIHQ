@@ -79,6 +79,23 @@ function buildSession(overrides = {}) {
   };
 }
 
+function buildAgentPlan(overrides = {}) {
+  return {
+    ok: true,
+    version: "pionero_livekit_agent_runner.v1",
+    provider: "livekit",
+    status: "planned",
+    networkIo: false,
+    reasonCode: "livekit_room_client_not_configured",
+    roomName: "pionero-browser-test",
+    readiness: {
+      agentParticipantReady: false,
+      reasonCode: "pionero_agent_runner_not_started",
+    },
+    ...overrides,
+  };
+}
+
 describe("usePioneroLiveKitRoom", () => {
   beforeEach(() => {
     mockLiveKit.rooms.length = 0;
@@ -89,10 +106,21 @@ describe("usePioneroLiveKitRoom", () => {
   it("creates a Pionero LiveKit session, connects the room, and publishes mic audio", async () => {
     const localMicTrack = { stop: vi.fn() };
     const createPioneroLiveKitSession = vi.fn().mockResolvedValue(buildSession());
+    const startPioneroLiveKitAgentPlan = vi
+      .fn()
+      .mockResolvedValue(
+        buildAgentPlan({
+          apiSecret: "agent-secret-test",
+          token: "agent-token-test",
+        })
+      );
     mockLiveKit.createLocalAudioTrack.mockResolvedValue(localMicTrack);
 
     const { result } = renderHook(() =>
-      usePioneroLiveKitRoom({ createPioneroLiveKitSession })
+      usePioneroLiveKitRoom({
+        createPioneroLiveKitSession,
+        startPioneroLiveKitAgentPlan,
+      })
     );
 
     await act(async () => {
@@ -114,22 +142,42 @@ describe("usePioneroLiveKitRoom", () => {
       "wss://livekit.example.test",
       "token-test"
     );
+    expect(startPioneroLiveKitAgentPlan).toHaveBeenCalledWith({
+      roomName: "pionero-browser-test",
+    });
+    expect(room.connect.mock.invocationCallOrder[0]).toBeLessThan(
+      startPioneroLiveKitAgentPlan.mock.invocationCallOrder[0]
+    );
     expect(mockLiveKit.createLocalAudioTrack).toHaveBeenCalledTimes(1);
     expect(room.localParticipant.publishTrack).toHaveBeenCalledWith(localMicTrack);
     expect(result.current.status).toBe("live");
     expect(result.current.roomName).toBe("pionero-browser-test");
     expect(result.current.identity).toBe("user-test");
     expect(result.current.localMicEnabled).toBe(true);
+    expect(result.current.agentStatus).toBe("planned");
+    expect(result.current.agentReasonCode).toBe(
+      "livekit_room_client_not_configured"
+    );
+    expect(result.current.agentNetworkIo).toBe(false);
+    expect(result.current.agentReady).toBe(false);
     expect(result.current.session.token).toBeUndefined();
     expect(JSON.stringify(result.current.session)).not.toContain("token-test");
+    expect(JSON.stringify(result.current)).not.toContain("agent-token-test");
+    expect(JSON.stringify(result.current)).not.toContain("agent-secret-test");
   });
 
   it("updates participants from LiveKit room events", async () => {
     const createPioneroLiveKitSession = vi.fn().mockResolvedValue(buildSession());
+    const startPioneroLiveKitAgentPlan = vi
+      .fn()
+      .mockResolvedValue(buildAgentPlan());
     mockLiveKit.createLocalAudioTrack.mockResolvedValue({ stop: vi.fn() });
 
     const { result } = renderHook(() =>
-      usePioneroLiveKitRoom({ createPioneroLiveKitSession })
+      usePioneroLiveKitRoom({
+        createPioneroLiveKitSession,
+        startPioneroLiveKitAgentPlan,
+      })
     );
 
     await act(async () => {
@@ -161,10 +209,16 @@ describe("usePioneroLiveKitRoom", () => {
   it("disconnects the room, stops the mic track, and clears room state", async () => {
     const localMicTrack = { stop: vi.fn() };
     const createPioneroLiveKitSession = vi.fn().mockResolvedValue(buildSession());
+    const startPioneroLiveKitAgentPlan = vi
+      .fn()
+      .mockResolvedValue(buildAgentPlan());
     mockLiveKit.createLocalAudioTrack.mockResolvedValue(localMicTrack);
 
     const { result } = renderHook(() =>
-      usePioneroLiveKitRoom({ createPioneroLiveKitSession })
+      usePioneroLiveKitRoom({
+        createPioneroLiveKitSession,
+        startPioneroLiveKitAgentPlan,
+      })
     );
 
     await act(async () => {
@@ -184,15 +238,57 @@ describe("usePioneroLiveKitRoom", () => {
     expect(result.current.identity).toBe("");
     expect(result.current.participants).toEqual([]);
     expect(result.current.localMicEnabled).toBe(false);
+    expect(result.current.agentStatus).toBe("idle");
+    expect(result.current.agentReasonCode).toBe("");
+    expect(result.current.agentNetworkIo).toBe(false);
+    expect(result.current.agentReady).toBe(false);
+  });
+
+  it("keeps the browser room live when the agent start-plan fails", async () => {
+    const localMicTrack = { stop: vi.fn() };
+    const createPioneroLiveKitSession = vi.fn().mockResolvedValue(buildSession());
+    const startPioneroLiveKitAgentPlan = vi
+      .fn()
+      .mockRejectedValue(new Error("agent plan failed"));
+    mockLiveKit.createLocalAudioTrack.mockResolvedValue(localMicTrack);
+
+    const { result } = renderHook(() =>
+      usePioneroLiveKitRoom({
+        createPioneroLiveKitSession,
+        startPioneroLiveKitAgentPlan,
+      })
+    );
+
+    await act(async () => {
+      await result.current.connect();
+    });
+
+    const room = mockLiveKit.rooms[0];
+    expect(startPioneroLiveKitAgentPlan).toHaveBeenCalledWith({
+      roomName: "pionero-browser-test",
+    });
+    expect(room.disconnect).not.toHaveBeenCalled();
+    expect(result.current.status).toBe("live");
+    expect(result.current.localMicEnabled).toBe(true);
+    expect(result.current.agentStatus).toBe("warning");
+    expect(result.current.agentReasonCode).toMatch(/agent plan failed/i);
+    expect(result.current.agentNetworkIo).toBe(false);
+    expect(result.current.agentReady).toBe(false);
   });
 
   it("surfaces session creation failures without creating a room", async () => {
     const createPioneroLiveKitSession = vi
       .fn()
       .mockRejectedValue(new Error("session failed"));
+    const startPioneroLiveKitAgentPlan = vi
+      .fn()
+      .mockResolvedValue(buildAgentPlan());
 
     const { result } = renderHook(() =>
-      usePioneroLiveKitRoom({ createPioneroLiveKitSession })
+      usePioneroLiveKitRoom({
+        createPioneroLiveKitSession,
+        startPioneroLiveKitAgentPlan,
+      })
     );
 
     await act(async () => {
@@ -200,6 +296,7 @@ describe("usePioneroLiveKitRoom", () => {
     });
 
     expect(mockLiveKit.Room).not.toHaveBeenCalled();
+    expect(startPioneroLiveKitAgentPlan).not.toHaveBeenCalled();
     expect(result.current.status).toBe("error");
     expect(result.current.error).toMatch(/session failed/i);
     expect(result.current.localMicEnabled).toBe(false);
