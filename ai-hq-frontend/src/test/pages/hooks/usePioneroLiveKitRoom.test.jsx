@@ -439,18 +439,22 @@ describe("usePioneroLiveKitRoom", () => {
     expect(result.current.participants).toEqual([]);
   });
 
-  it("disconnects the room, stops the mic track, and clears room state", async () => {
+  it("disconnects the room, stops the mic track, stops backend runtime, and clears room state", async () => {
     const localMicTrack = { stop: vi.fn() };
     const createPioneroLiveKitSession = vi.fn().mockResolvedValue(buildSession());
     const startPioneroLiveKitAgentPlan = vi
       .fn()
       .mockResolvedValue(buildAgentPlan());
+    const stopPioneroLiveKitAgentPlan = vi
+      .fn()
+      .mockResolvedValue(buildAgentPlan({ status: "stopped" }));
     mockLiveKit.createLocalAudioTrack.mockResolvedValue(localMicTrack);
 
     const { result } = renderHook(() =>
       usePioneroLiveKitRoom({
         createPioneroLiveKitSession,
         startPioneroLiveKitAgentPlan,
+        stopPioneroLiveKitAgentPlan,
       })
     );
 
@@ -466,6 +470,9 @@ describe("usePioneroLiveKitRoom", () => {
 
     expect(room.disconnect).toHaveBeenCalledTimes(1);
     expect(localMicTrack.stop).toHaveBeenCalledTimes(1);
+    expect(stopPioneroLiveKitAgentPlan).toHaveBeenCalledWith({
+      roomName: "pionero-browser-test",
+    });
     expect(result.current.status).toBe("idle");
     expect(result.current.roomName).toBe("");
     expect(result.current.identity).toBe("");
@@ -497,6 +504,61 @@ describe("usePioneroLiveKitRoom", () => {
     expect(result.current.agentLlmLastPlannedResponse).toBe("");
     expect(result.current.agentLlmLastObservedAt).toBe("");
     expect(result.current.agentLlmReasonCode).toBe("");
+  });
+
+  it("refreshes backend runtime status for the active Pionero room", async () => {
+    const createPioneroLiveKitSession = vi.fn().mockResolvedValue(buildSession());
+    const getPioneroLiveKitAgentStatus = vi.fn().mockResolvedValue(
+      buildAgentPlan({
+        status: "connected",
+        networkIo: true,
+        reasonCode: "",
+        readiness: {
+          agentParticipantReady: true,
+          reasonCode: "",
+        },
+        audioIngest: {
+          enabled: true,
+          status: "waiting_for_audio",
+          framesObserved: 0,
+          bytesObserved: 0,
+          lastObservedAt: "",
+          reasonCode: "",
+        },
+      })
+    );
+    const startPioneroLiveKitAgentPlan = vi
+      .fn()
+      .mockResolvedValue(buildAgentPlan());
+    mockLiveKit.createLocalAudioTrack.mockResolvedValue({ stop: vi.fn() });
+
+    const { result } = renderHook(() =>
+      usePioneroLiveKitRoom({
+        createPioneroLiveKitSession,
+        getPioneroLiveKitAgentStatus,
+        startPioneroLiveKitAgentPlan,
+      })
+    );
+
+    await act(async () => {
+      await result.current.connect();
+    });
+
+    await act(async () => {
+      const refreshResult = await result.current.refreshAgentStatus();
+      expect(refreshResult).toEqual({
+        ok: true,
+        status: "connected",
+      });
+    });
+
+    expect(getPioneroLiveKitAgentStatus).toHaveBeenCalledWith({
+      roomName: "pionero-browser-test",
+    });
+    expect(result.current.agentStatus).toBe("connected");
+    expect(result.current.agentNetworkIo).toBe(true);
+    expect(result.current.agentReady).toBe(true);
+    expect(result.current.agentAudioIngestStatus).toBe("waiting_for_audio");
   });
 
   it("keeps the browser room live when the agent start-plan fails", async () => {

@@ -154,6 +154,14 @@ export async function startPioneroLiveKitAgentPlan(body = {}) {
   return apiPost("/api/voice/pionero/livekit/agent/start-plan", body);
 }
 
+export async function getPioneroLiveKitAgentStatus(params = {}) {
+  return apiGet(`/api/voice/pionero/livekit/agent/status${qs(params)}`);
+}
+
+export async function stopPioneroLiveKitAgentPlan(body = {}) {
+  return apiPost("/api/voice/pionero/livekit/agent/stop-plan", body);
+}
+
 export async function getVoiceSpeechGatewayReadiness(params = {}) {
   return apiGet(`/api/voice/speech/gateway/readiness${qs(params)}`);
 }
