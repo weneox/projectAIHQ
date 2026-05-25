@@ -62,6 +62,7 @@ import {
   buildSonioxSpeechRuntimeConfig,
   createSonioxSpeechAdapter,
   buildPioneroLiveKitAgentPlan,
+  createPioneroLiveKitAgentRunner,
 } from "../../../modules/voice/index.js";
 import {
   createVoiceBusinessActionInboxSinkExecutor,
@@ -1873,6 +1874,29 @@ async function handlePioneroLiveKitAgentPlan(req, res) {
   }
 }
 
+async function handlePioneroLiveKitAgentStartPlan(req, res) {
+  const logger = getRouteLogger(req, "voice.pionero.livekit.agent.start_plan");
+
+  try {
+    const runner = createPioneroLiveKitAgentRunner({
+      roomName: req.body?.roomName || req.query?.roomName,
+      logger,
+    });
+    const state = await runner.start();
+
+    return ok(res, state);
+  } catch (err) {
+    logger.error("voice.pionero.livekit.agent.start_plan.failed", err);
+    recordVoiceRouteFailure({
+      route: "voice.pionero.livekit.agent.start_plan",
+      reasonCode: "pionero_livekit_agent_start_plan_failed",
+      err,
+      req,
+    });
+    return fail(res, 500, "pionero_livekit_agent_start_plan_failed");
+  }
+}
+
 function readVoiceSpeechGatewayOverrides(req = {}) {
   const query = obj(req.query);
   const body = obj(req.body);
@@ -2249,6 +2273,10 @@ export function voiceRoutes({
 
   r.get("/voice/pionero/livekit/agent/plan", requireOperatorSurfaceAccess, (req, res) =>
     handlePioneroLiveKitAgentPlan(req, res)
+  );
+
+  r.post("/voice/pionero/livekit/agent/start-plan", requireOperatorSurfaceAccess, (req, res) =>
+    handlePioneroLiveKitAgentStartPlan(req, res)
   );
 
   r.get("/settings/voice", requireOperatorSurfaceAccess, (req, res) =>
