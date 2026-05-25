@@ -43,3 +43,4 @@ export * from "./speech/providers/sonioxTtsSession.js";
 export * from "./speech/providers/sonioxSttSession.js";
 
 export * from "./pionero/pioneroLiveKitAgent.js";
+export * from "./pionero/pioneroLiveKitAgentRunner.js";
