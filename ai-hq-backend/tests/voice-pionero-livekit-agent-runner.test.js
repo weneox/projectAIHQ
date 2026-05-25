@@ -7,6 +7,7 @@ import {
   buildPioneroLiveKitAgentRunnerState,
   createPioneroLiveKitAgentRunner,
   recordPioneroAudioIngestFrame,
+  recordPioneroSttTranscript,
 } from "../src/modules/voice/pionero/pioneroLiveKitAgentRunner.js";
 import {
   voiceRoutes,
@@ -112,6 +113,19 @@ function assertNoRawAudioLeak(payload = {}, rawAudio = "raw-audio-secret") {
   assert.equal(serialized.includes("audioChunk"), false);
 }
 
+function assertDefaultSttIdle(stt = {}) {
+  assert.deepEqual(stt, {
+    provider: "soniox",
+    enabled: false,
+    status: "idle",
+    transcriptsObserved: 0,
+    lastTranscript: "",
+    lastObservedAt: "",
+    reasonCode: "stt_session_not_started",
+    networkIo: false,
+  });
+}
+
 test("pionero LiveKit agent runner fails safely when config is missing", async () => {
   const runner = createPioneroLiveKitAgentRunner({
     env: createLiveKitEnv({
@@ -140,6 +154,7 @@ test("pionero LiveKit agent runner fails safely when config is missing", async (
     lastObservedAt: "",
     reasonCode: "livekit_config_missing",
   });
+  assertDefaultSttIdle(state.stt);
   assertNoSecretLeak(state, "test-missing-secret-should-not-leak");
 });
 
@@ -168,6 +183,7 @@ test("pionero LiveKit agent runner plans without RoomClass and does no network I
     lastObservedAt: "",
     reasonCode: "livekit_room_client_not_configured",
   });
+  assertDefaultSttIdle(state.stt);
   assertNoSecretLeak(state);
 });
 
@@ -209,6 +225,51 @@ test("pionero audio ingest helper counts frames and never stores raw audio", () 
   });
   assertNoRawAudioLeak(state);
   assertNoSecretLeak(state, "test-helper-token-secret");
+});
+
+test("pionero STT transcript helper stores safe text only", () => {
+  let state = buildPioneroLiveKitAgentRunnerState({
+    roomName: "pionero-demo-room",
+    status: "connected",
+    stt: {
+      provider: "soniox",
+      enabled: true,
+      status: "streaming",
+      networkIo: false,
+    },
+  });
+  state.token = "test-helper-token-secret";
+  state.rawAudio = "raw-audio-secret";
+
+  state = recordPioneroSttTranscript(
+    state,
+    {
+      ok: true,
+      status: "transcribed",
+      text: "Salam Pionero",
+      transcribedAt: "2026-01-02T03:04:09.000Z",
+      networkIo: true,
+      token: "test-stt-token-secret",
+      rawAudio: "raw-audio-secret",
+    },
+    {
+      now: () => new Date("2026-01-02T03:04:10.000Z"),
+    }
+  );
+
+  assert.deepEqual(state.stt, {
+    provider: "soniox",
+    enabled: true,
+    status: "transcript_observed",
+    transcriptsObserved: 1,
+    lastTranscript: "Salam Pionero",
+    lastObservedAt: "2026-01-02T03:04:09.000Z",
+    reasonCode: "",
+    networkIo: true,
+  });
+  assertNoSecretLeak(state, "test-helper-token-secret");
+  assertNoSecretLeak(state, "test-stt-token-secret");
+  assertNoRawAudioLeak(state);
 });
 
 test("pionero LiveKit agent runner connects fake RoomClass without exposing token", async () => {
@@ -282,6 +343,7 @@ test("pionero LiveKit agent runner connects fake RoomClass without exposing toke
     lastObservedAt: "",
     reasonCode: "",
   });
+  assertDefaultSttIdle(state.stt);
   assertNoSecretLeak(state, "test-agent-token-secret");
 
   const stoppedState = await runner.stop();
@@ -315,8 +377,12 @@ test("pionero LiveKit agent runner observes fake room audio events safely", asyn
       return this;
     }
 
-    emit(eventName, ...args) {
-      this.handlers.get(eventName)?.forEach((handler) => handler(...args));
+    async emit(eventName, ...args) {
+      const results = [];
+      this.handlers.get(eventName)?.forEach((handler) => {
+        results.push(handler(...args));
+      });
+      await Promise.all(results);
     }
   }
 
@@ -341,7 +407,7 @@ test("pionero LiveKit agent runner observes fake room audio events safely", asyn
 
   assert.equal(startedState.audioIngest.status, "waiting_for_audio");
 
-  rooms[0].emit("testAudioFrame", {
+  await rooms[0].emit("testAudioFrame", {
     byteLength: 7,
     data: "raw-audio-secret",
   });
@@ -356,7 +422,113 @@ test("pionero LiveKit agent runner observes fake room audio events safely", asyn
     lastObservedAt: "2026-01-02T03:04:05.000Z",
     reasonCode: "",
   });
+  assertDefaultSttIdle(state.stt);
   assertNoSecretLeak(state, "test-agent-token-secret");
+  assertNoRawAudioLeak(state);
+});
+
+test("pionero LiveKit agent runner streams observed audio into fake STT session", async () => {
+  const rooms = [];
+  const sttCalls = [];
+
+  class FakeRoom {
+    constructor() {
+      this.handlers = new Map();
+      rooms.push(this);
+    }
+
+    async connect() {}
+
+    on(eventName, handler) {
+      const handlers = this.handlers.get(eventName) || new Set();
+      handlers.add(handler);
+      this.handlers.set(eventName, handlers);
+      return this;
+    }
+
+    off(eventName, handler) {
+      this.handlers.get(eventName)?.delete(handler);
+      return this;
+    }
+
+    async emit(eventName, ...args) {
+      const results = [];
+      this.handlers.get(eventName)?.forEach((handler) => {
+        results.push(handler(...args));
+      });
+      await Promise.all(results);
+    }
+  }
+
+  const runner = createPioneroLiveKitAgentRunner({
+    RoomClass: FakeRoom,
+    audioIngestEventNames: ["testAudioFrame"],
+    createAgentToken: async () => ({
+      provider: "livekit",
+      url: "wss://livekit.example.test",
+      roomName: "pionero-demo-room",
+      agentIdentity: "aihq-pionero-agent",
+      agentName: "AIHQ Pionero Agent",
+      token: "test-agent-token-secret",
+    }),
+    createSttSession: async () => ({
+      provider: "soniox",
+      async transcribeAudioChunk(input = {}) {
+        sttCalls.push(input);
+        return {
+          ok: true,
+          status: "transcribed",
+          provider: "soniox",
+          stage: "stt",
+          text: "Salam Pionero",
+          transcribedAt: "2026-01-02T03:04:06.000Z",
+          networkIo: true,
+          token: "test-stt-token-secret",
+          rawAudio: "raw-audio-secret",
+        };
+      },
+    }),
+    env: createLiveKitEnv(),
+    logger: createTestLogger(),
+    now: () => new Date("2026-01-02T03:04:05.000Z"),
+    roomName: "pionero-demo-room",
+  });
+
+  const startedState = await runner.start();
+
+  assert.equal(startedState.stt.enabled, true);
+  assert.equal(startedState.stt.status, "waiting_for_audio");
+
+  await rooms[0].emit("testAudioFrame", {
+    byteLength: 7,
+    data: "raw-audio-secret",
+  });
+
+  const state = runner.getState();
+
+  assert.equal(sttCalls.length, 1);
+  assert.equal(sttCalls[0].audioChunk.byteLength, 7);
+  assert.equal(sttCalls[0].finalize, false);
+  assert.deepEqual(state.audioIngest, {
+    enabled: true,
+    status: "audio_observed",
+    framesObserved: 1,
+    bytesObserved: 7,
+    lastObservedAt: "2026-01-02T03:04:05.000Z",
+    reasonCode: "",
+  });
+  assert.deepEqual(state.stt, {
+    provider: "soniox",
+    enabled: true,
+    status: "transcript_observed",
+    transcriptsObserved: 1,
+    lastTranscript: "Salam Pionero",
+    lastObservedAt: "2026-01-02T03:04:06.000Z",
+    reasonCode: "",
+    networkIo: true,
+  });
+  assertNoSecretLeak(state, "test-agent-token-secret");
+  assertNoSecretLeak(state, "test-stt-token-secret");
   assertNoRawAudioLeak(state);
 });
 
@@ -394,6 +566,7 @@ test("pionero LiveKit agent start-plan route returns planned local state", async
         lastObservedAt: "",
         reasonCode: "livekit_room_client_not_configured",
       });
+      assertDefaultSttIdle(body.stt);
       assertNoSecretLeak(body);
     });
   });
