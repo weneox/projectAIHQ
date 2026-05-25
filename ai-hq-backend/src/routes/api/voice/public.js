@@ -62,7 +62,9 @@ import {
   buildSonioxSpeechRuntimeConfig,
   createSonioxSpeechAdapter,
   buildPioneroLiveKitAgentPlan,
-  createPioneroLiveKitAgentRunner,
+  getPioneroLiveKitAgentRuntimeState,
+  startPioneroLiveKitAgentRuntime,
+  stopPioneroLiveKitAgentRuntime,
 } from "../../../modules/voice/index.js";
 import {
   createVoiceBusinessActionInboxSinkExecutor,
@@ -1878,11 +1880,10 @@ async function handlePioneroLiveKitAgentStartPlan(req, res) {
   const logger = getRouteLogger(req, "voice.pionero.livekit.agent.start_plan");
 
   try {
-    const runner = createPioneroLiveKitAgentRunner({
+    const state = await startPioneroLiveKitAgentRuntime({
       roomName: req.body?.roomName || req.query?.roomName,
       logger,
     });
-    const state = await runner.start();
 
     return ok(res, state);
   } catch (err) {
@@ -1894,6 +1895,60 @@ async function handlePioneroLiveKitAgentStartPlan(req, res) {
       req,
     });
     return fail(res, 500, "pionero_livekit_agent_start_plan_failed");
+  }
+}
+
+async function handlePioneroLiveKitAgentStatus(req, res) {
+  const logger = getRouteLogger(req, "voice.pionero.livekit.agent.status");
+
+  try {
+    const roomName = req.query?.roomName || req.body?.roomName;
+    const state = getPioneroLiveKitAgentRuntimeState({ roomName });
+
+    if (!state) {
+      return fail(res, 404, "pionero_agent_runtime_not_found", {
+        reasonCode: "pionero_agent_runtime_not_found",
+        roomName: s(roomName),
+      });
+    }
+
+    return ok(res, state);
+  } catch (err) {
+    logger.error("voice.pionero.livekit.agent.status.failed", err);
+    recordVoiceRouteFailure({
+      route: "voice.pionero.livekit.agent.status",
+      reasonCode: "pionero_livekit_agent_status_failed",
+      err,
+      req,
+    });
+    return fail(res, 500, "pionero_livekit_agent_status_failed");
+  }
+}
+
+async function handlePioneroLiveKitAgentStopPlan(req, res) {
+  const logger = getRouteLogger(req, "voice.pionero.livekit.agent.stop_plan");
+
+  try {
+    const roomName = req.body?.roomName || req.query?.roomName;
+    const state = await stopPioneroLiveKitAgentRuntime({ roomName });
+
+    if (!state) {
+      return fail(res, 404, "pionero_agent_runtime_not_found", {
+        reasonCode: "pionero_agent_runtime_not_found",
+        roomName: s(roomName),
+      });
+    }
+
+    return ok(res, state);
+  } catch (err) {
+    logger.error("voice.pionero.livekit.agent.stop_plan.failed", err);
+    recordVoiceRouteFailure({
+      route: "voice.pionero.livekit.agent.stop_plan",
+      reasonCode: "pionero_livekit_agent_stop_plan_failed",
+      err,
+      req,
+    });
+    return fail(res, 500, "pionero_livekit_agent_stop_plan_failed");
   }
 }
 
@@ -2277,6 +2332,14 @@ export function voiceRoutes({
 
   r.post("/voice/pionero/livekit/agent/start-plan", requireOperatorSurfaceAccess, (req, res) =>
     handlePioneroLiveKitAgentStartPlan(req, res)
+  );
+
+  r.get("/voice/pionero/livekit/agent/status", requireOperatorSurfaceAccess, (req, res) =>
+    handlePioneroLiveKitAgentStatus(req, res)
+  );
+
+  r.post("/voice/pionero/livekit/agent/stop-plan", requireOperatorSurfaceAccess, (req, res) =>
+    handlePioneroLiveKitAgentStopPlan(req, res)
   );
 
   r.get("/settings/voice", requireOperatorSurfaceAccess, (req, res) =>

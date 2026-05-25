@@ -805,6 +805,90 @@ test("pionero LiveKit agent start-plan route returns planned local state", async
   });
 });
 
+test("pionero LiveKit agent runtime status and stop routes reuse room state", async () => {
+  await withEnv(createLiveKitEnv(), async () => {
+    const app = createVoiceApp();
+
+    await withTestServer(app, async (baseUrl) => {
+      const roomName = "pionero runtime route room";
+
+      const startResponse = await fetch(
+        `${baseUrl}/voice/pionero/livekit/agent/start-plan`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ roomName }),
+        }
+      );
+      const startBody = await startResponse.json();
+
+      assert.equal(startResponse.status, 200);
+      assert.equal(startBody.ok, true);
+      assert.equal(startBody.status, "planned");
+      assert.equal(startBody.roomName, "pionero-runtime-route-room");
+      assertNoSecretLeak(startBody);
+
+      const statusResponse = await fetch(
+        `${baseUrl}/voice/pionero/livekit/agent/status?roomName=${encodeURIComponent(roomName)}`
+      );
+      const statusBody = await statusResponse.json();
+
+      assert.equal(statusResponse.status, 200);
+      assert.equal(statusBody.ok, true);
+      assert.equal(statusBody.status, "planned");
+      assert.equal(statusBody.roomName, "pionero-runtime-route-room");
+      assertDefaultSttIdle(statusBody.stt);
+      assertDefaultLlm(statusBody.llm, "planned");
+      assertDefaultTts(statusBody.tts, "planned");
+      assertNoSecretLeak(statusBody);
+
+      const stopResponse = await fetch(
+        `${baseUrl}/voice/pionero/livekit/agent/stop-plan`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ roomName }),
+        }
+      );
+      const stopBody = await stopResponse.json();
+
+      assert.equal(stopResponse.status, 200);
+      assert.equal(stopBody.ok, true);
+      assert.equal(stopBody.status, "stopped");
+      assert.equal(stopBody.roomName, "pionero-runtime-route-room");
+      assert.equal(stopBody.audioIngest.reasonCode, "pionero_agent_runner_stopped");
+      assert.equal(stopBody.stt.reasonCode, "pionero_agent_runner_stopped");
+      assert.equal(stopBody.llm.reasonCode, "pionero_agent_runner_stopped");
+      assert.equal(stopBody.tts.reasonCode, "pionero_agent_runner_stopped");
+      assertNoSecretLeak(stopBody);
+    });
+  });
+});
+
+test("pionero LiveKit agent status route returns safe not-found response", async () => {
+  await withEnv(createLiveKitEnv(), async () => {
+    const app = createVoiceApp();
+
+    await withTestServer(app, async (baseUrl) => {
+      const response = await fetch(
+        `${baseUrl}/voice/pionero/livekit/agent/status?roomName=missing-runtime-room`
+      );
+      const body = await response.json();
+
+      assert.equal(response.status, 404);
+      assert.equal(body.ok, false);
+      assert.equal(body.error, "pionero_agent_runtime_not_found");
+      assert.equal(body.reasonCode, "pionero_agent_runtime_not_found");
+      assert.equal(body.roomName, "missing-runtime-room");
+      assertNoSecretLeak(body);
+    });
+  });
+});
+
 test("pionero LiveKit agent start-plan route requires operator access", async () => {
   await withEnv(createLiveKitEnv(), async () => {
     const app = createVoiceApp({
