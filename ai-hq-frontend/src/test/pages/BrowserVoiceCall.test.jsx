@@ -64,6 +64,14 @@ function buildPioneroHook(overrides = {}) {
     agentAudioBytesObserved: 0,
     agentAudioLastObservedAt: "",
     agentAudioReasonCode: "",
+    agentSttProvider: "soniox",
+    agentSttStatus: "idle",
+    agentSttEnabled: false,
+    agentSttNetworkIo: false,
+    agentSttTranscriptsObserved: 0,
+    agentSttLastTranscript: "",
+    agentSttLastObservedAt: "",
+    agentSttReasonCode: "",
     ...overrides,
   };
 }
@@ -108,20 +116,23 @@ describe("BrowserVoiceCall", () => {
     useBrowserVoiceCall.mockReturnValue(hook);
     usePioneroLiveKitRoom.mockReturnValue(pioneroHook);
 
-    const { getByText, getByLabelText, queryByText } = render(<BrowserVoiceCall />);
+    const { getAllByText, getByText, getByLabelText, queryByText } = render(<BrowserVoiceCall />);
 
     expect(getByText("Three voice lanes")).toBeTruthy();
     expect(getByText("GPT Realtime WebRTC")).toBeTruthy();
     expect(getByText("Pionero LiveKit realtime lane")).toBeTruthy();
-    expect(getByText("Agent start-plan and ingest skeleton only; full AI loop is not running yet.")).toBeTruthy();
+    expect(getByText("Agent start-plan, ingest skeleton, and STT skeleton only; full AI loop is not running yet.")).toBeTruthy();
     expect(getByText("Agent start-plan status")).toBeTruthy();
     expect(getByText("Agent reason code")).toBeTruthy();
     expect(getByText("Agent network IO")).toBeTruthy();
     expect(getByText("Audio ingest status")).toBeTruthy();
     expect(getByText("Frames observed")).toBeTruthy();
     expect(getByText("Bytes observed")).toBeTruthy();
-    expect(getByText("Last observed")).toBeTruthy();
+    expect(getAllByText("Last observed").length).toBeGreaterThanOrEqual(2);
     expect(getByText("Audio reason code")).toBeTruthy();
+    expect(getByText("STT skeleton")).toBeTruthy();
+    expect(getByText("Transcripts observed")).toBeTruthy();
+    expect(getByText("Last transcript")).toBeTruthy();
     expect(getByText("Speech Bridge / Soniox lane")).toBeTruthy();
     expect(getByText("Soniox readiness")).toBeTruthy();
     expect(getByLabelText("Speech bridge text")).toBeTruthy();
@@ -179,6 +190,14 @@ describe("BrowserVoiceCall", () => {
       agentAudioBytesObserved: 1024,
       agentAudioLastObservedAt: "2026-01-02T03:04:05.000Z",
       agentAudioReasonCode: "audio_observed_for_test",
+      agentSttProvider: "soniox",
+      agentSttStatus: "transcript_observed",
+      agentSttEnabled: true,
+      agentSttNetworkIo: true,
+      agentSttTranscriptsObserved: 2,
+      agentSttLastTranscript: "Salam Pionero",
+      agentSttLastObservedAt: "2026-01-02T03:04:06.000Z",
+      agentSttReasonCode: "stt_transcript_for_test",
     });
     useBrowserVoiceCall.mockReturnValue(hook);
     usePioneroLiveKitRoom.mockReturnValue(pioneroHook);
@@ -192,6 +211,10 @@ describe("BrowserVoiceCall", () => {
     expect(getByText("1024")).toBeTruthy();
     expect(getByText("2026-01-02T03:04:05.000Z")).toBeTruthy();
     expect(getByText("audio_observed_for_test")).toBeTruthy();
+    expect(getByText("transcript_observed")).toBeTruthy();
+    expect(getByText("Salam Pionero")).toBeTruthy();
+    expect(getByText("2026-01-02T03:04:06.000Z")).toBeTruthy();
+    expect(getByText("stt_transcript_for_test")).toBeTruthy();
 
     fireEvent.click(getByText("End GPT Realtime call"));
     expect(hook.stopCall).toHaveBeenCalledTimes(1);

@@ -88,6 +88,14 @@ export default function BrowserVoiceCall() {
     agentAudioBytesObserved: pioneroLiveKitAgentAudioBytesObserved,
     agentAudioLastObservedAt: pioneroLiveKitAgentAudioLastObservedAt,
     agentAudioReasonCode: pioneroLiveKitAgentAudioReasonCode,
+    agentSttProvider: pioneroLiveKitAgentSttProvider,
+    agentSttStatus: pioneroLiveKitAgentSttStatus,
+    agentSttEnabled: pioneroLiveKitAgentSttEnabled,
+    agentSttNetworkIo: pioneroLiveKitAgentSttNetworkIo,
+    agentSttTranscriptsObserved: pioneroLiveKitAgentSttTranscriptsObserved,
+    agentSttLastTranscript: pioneroLiveKitAgentSttLastTranscript,
+    agentSttLastObservedAt: pioneroLiveKitAgentSttLastObservedAt,
+    agentSttReasonCode: pioneroLiveKitAgentSttReasonCode,
   } = usePioneroLiveKitRoom();
 
   const [speechBridgeDraftText, setSpeechBridgeDraftText] = useState("");
@@ -159,6 +167,20 @@ export default function BrowserVoiceCall() {
   );
   const pioneroLiveKitAgentAudioLastObservedLabel = s(
     pioneroLiveKitAgentAudioLastObservedAt,
+    "not observed"
+  );
+  const pioneroLiveKitAgentSttEnabledLabel = pioneroLiveKitAgentSttEnabled
+    ? "yes"
+    : "no";
+  const pioneroLiveKitAgentSttNetworkIoLabel = pioneroLiveKitAgentSttNetworkIo
+    ? "yes"
+    : "no";
+  const pioneroLiveKitAgentSttLastTranscriptLabel = s(
+    pioneroLiveKitAgentSttLastTranscript,
+    "not observed"
+  );
+  const pioneroLiveKitAgentSttLastObservedLabel = s(
+    pioneroLiveKitAgentSttLastObservedAt,
     "not observed"
   );
 
@@ -353,7 +375,7 @@ export default function BrowserVoiceCall() {
         </div>
 
         <p className="mt-3 text-xs text-text-muted">
-          Agent start-plan and ingest skeleton only; full AI loop is not running yet.
+          Agent start-plan, ingest skeleton, and STT skeleton only; full AI loop is not running yet.
         </p>
 
         <div className="mt-3 grid gap-3 md:grid-cols-3">
@@ -422,6 +444,77 @@ export default function BrowserVoiceCall() {
             </div>
             <div className="mt-1 text-sm font-semibold text-text">
               {s(pioneroLiveKitAgentAudioReasonCode, "not requested")}
+            </div>
+          </div>
+        </div>
+
+        <p className="mt-3 text-xs font-semibold uppercase tracking-[0.12em] text-text-subtle">
+          STT skeleton
+        </p>
+
+        <div className="mt-2 grid gap-3 md:grid-cols-4">
+          <div className="rounded-2xl border border-line-soft bg-surface-subtle p-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              Provider
+            </div>
+            <div className="mt-1 text-sm font-semibold text-text">
+              {s(pioneroLiveKitAgentSttProvider, "soniox")}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-line-soft bg-surface-subtle p-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              Status
+            </div>
+            <div className="mt-1 text-sm font-semibold text-text">
+              {s(pioneroLiveKitAgentSttStatus, "idle")}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-line-soft bg-surface-subtle p-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              Enabled
+            </div>
+            <div className="mt-1 text-sm font-semibold text-text">
+              {pioneroLiveKitAgentSttEnabledLabel}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-line-soft bg-surface-subtle p-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              Network IO
+            </div>
+            <div className="mt-1 text-sm font-semibold text-text">
+              {pioneroLiveKitAgentSttNetworkIoLabel}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-line-soft bg-surface-subtle p-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              Transcripts observed
+            </div>
+            <div className="mt-1 text-sm font-semibold text-text">
+              {pioneroLiveKitAgentSttTranscriptsObserved}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-line-soft bg-surface-subtle p-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              Last transcript
+            </div>
+            <div className="mt-1 break-words text-sm font-semibold text-text">
+              {pioneroLiveKitAgentSttLastTranscriptLabel}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-line-soft bg-surface-subtle p-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              Last observed
+            </div>
+            <div className="mt-1 text-sm font-semibold text-text">
+              {pioneroLiveKitAgentSttLastObservedLabel}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-line-soft bg-surface-subtle p-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              Reason code
+            </div>
+            <div className="mt-1 break-words text-sm font-semibold text-text">
+              {s(pioneroLiveKitAgentSttReasonCode, "not requested")}
             </div>
           </div>
         </div>
