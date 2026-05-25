@@ -95,6 +95,31 @@ function hasMissingConfig(missing = {}) {
   return Object.values(missing).some((value) => value === true);
 }
 
+function readRoomClient(value = null) {
+  if (typeof value === "function") {
+    return {
+      RoomClass: value,
+      RoomEvent: value.RoomEvent || null,
+    };
+  }
+
+  if (value && typeof value === "object") {
+    return {
+      RoomClass: typeof value.RoomClass === "function"
+        ? value.RoomClass
+        : typeof value.Room === "function"
+          ? value.Room
+          : null,
+      RoomEvent: value.RoomEvent || null,
+    };
+  }
+
+  return {
+    RoomClass: null,
+    RoomEvent: null,
+  };
+}
+
 function safeEventCounts(value = {}) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return {};
@@ -117,6 +142,15 @@ function buildMonitorResult({
   agentIdentity = "",
   reasonCode = "",
   monitorSeconds = DEFAULT_MONITOR_SECONDS,
+  participantsObserved = 0,
+  remoteParticipantsObserved = 0,
+  trackPublicationsObserved = 0,
+  audioPublicationsObserved = 0,
+  subscribedAudioTracksObserved = 0,
+  lastParticipantIdentity = "",
+  lastPublicationKind = "",
+  lastPublicationSource = "",
+  lastPublicationSubscribed = false,
   tracksObserved = 0,
   framesObserved = 0,
   bytesObserved = 0,
@@ -145,6 +179,15 @@ function buildMonitorResult({
     reasonCode: safeText(reasonCode),
     monitorSeconds: n(monitorSeconds, DEFAULT_MONITOR_SECONDS),
     observedAudio: safeTracksObserved > 0 || safeFramesObserved > 0,
+    participantsObserved: n(participantsObserved),
+    remoteParticipantsObserved: n(remoteParticipantsObserved),
+    trackPublicationsObserved: n(trackPublicationsObserved),
+    audioPublicationsObserved: n(audioPublicationsObserved),
+    subscribedAudioTracksObserved: n(subscribedAudioTracksObserved),
+    lastParticipantIdentity: safeText(lastParticipantIdentity),
+    lastPublicationKind: safeText(lastPublicationKind),
+    lastPublicationSource: safeText(lastPublicationSource),
+    lastPublicationSubscribed: lastPublicationSubscribed === true,
     tracksObserved: safeTracksObserved,
     framesObserved: safeFramesObserved,
     bytesObserved: n(bytesObserved),
@@ -180,6 +223,15 @@ function buildResultFromState({
     agentIdentity: finalState?.agentIdentity || startState?.agentIdentity,
     reasonCode: finalState?.reasonCode || startState?.reasonCode,
     monitorSeconds,
+    participantsObserved: audioIngest.participantsObserved,
+    remoteParticipantsObserved: audioIngest.remoteParticipantsObserved,
+    trackPublicationsObserved: audioIngest.trackPublicationsObserved,
+    audioPublicationsObserved: audioIngest.audioPublicationsObserved,
+    subscribedAudioTracksObserved: audioIngest.subscribedAudioTracksObserved,
+    lastParticipantIdentity: audioIngest.lastParticipantIdentity,
+    lastPublicationKind: audioIngest.lastPublicationKind,
+    lastPublicationSource: audioIngest.lastPublicationSource,
+    lastPublicationSubscribed: audioIngest.lastPublicationSubscribed,
     tracksObserved: audioIngest.tracksObserved,
     framesObserved: audioIngest.framesObserved,
     bytesObserved: audioIngest.bytesObserved,
@@ -192,6 +244,27 @@ function buildResultFromState({
     llmStatus: finalState?.llm?.status || startState?.llm?.status,
     ttsStatus: finalState?.tts?.status || startState?.tts?.status,
   });
+}
+
+async function pollRunnerDiagnostics({
+  runner = null,
+  monitorSeconds = DEFAULT_MONITOR_SECONDS,
+  wait = defaultWait,
+} = {}) {
+  let finalState = typeof runner?.getState === "function"
+    ? runner.getState()
+    : null;
+
+  for (let elapsedSeconds = 0; elapsedSeconds < monitorSeconds; elapsedSeconds += 1) {
+    await wait(1000);
+    finalState = typeof runner?.snapshotDiagnostics === "function"
+      ? runner.snapshotDiagnostics()
+      : typeof runner?.getState === "function"
+        ? runner.getState()
+        : finalState;
+  }
+
+  return finalState;
 }
 
 export async function runPioneroLiveKitAudioMonitor({
@@ -248,7 +321,8 @@ export async function runPioneroLiveKitAudioMonitor({
             env,
             logger: null,
           });
-    const RoomClass = await resolveRoomClass({ roomName });
+    const roomClient = readRoomClient(await resolveRoomClass({ roomName }));
+    const { RoomClass, RoomEvent } = roomClient;
 
     if (typeof RoomClass !== "function") {
       return buildMonitorResult({
@@ -263,6 +337,7 @@ export async function runPioneroLiveKitAudioMonitor({
 
     const runner = createRunner({
       RoomClass,
+      ...(RoomEvent ? { RoomEvent } : {}),
       env,
       logger: null,
       now,
@@ -274,10 +349,11 @@ export async function runPioneroLiveKitAudioMonitor({
 
     try {
       startState = await runner.start();
-      await wait(monitorSeconds * 1000);
-      finalState = typeof runner.getState === "function"
-        ? runner.getState()
-        : startState;
+      finalState = await pollRunnerDiagnostics({
+        runner,
+        monitorSeconds,
+        wait,
+      });
     } finally {
       stopState = await runner.stop?.();
     }
