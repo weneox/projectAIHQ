@@ -117,6 +117,17 @@ function buildAgentPlan(overrides = {}) {
       reasonCode: "llm_not_started",
       networkIo: false,
     },
+    tts: {
+      provider: "cartesia",
+      enabled: false,
+      status: "planned",
+      speechPlansCreated: 0,
+      lastInputText: "",
+      lastAudioPlan: "",
+      lastObservedAt: "",
+      reasonCode: "tts_not_started",
+      networkIo: false,
+    },
     readiness: {
       agentParticipantReady: false,
       reasonCode: "pionero_agent_runner_not_started",
@@ -178,6 +189,20 @@ describe("usePioneroLiveKitRoom", () => {
             rawAudio: "llm-raw-audio-secret",
             token: "llm-agent-token-test",
             apiSecret: "llm-agent-secret-test",
+          },
+          tts: {
+            provider: "cartesia",
+            enabled: true,
+            status: "speech_plan_built",
+            speechPlansCreated: 1,
+            lastInputText: "Turn plan pending real LLM.",
+            lastAudioPlan: "TTS plan pending real synthesis.",
+            lastObservedAt: "2026-01-02T03:04:08.000Z",
+            reasonCode: "",
+            networkIo: false,
+            rawAudio: "tts-raw-audio-secret",
+            token: "tts-agent-token-test",
+            apiSecret: "tts-agent-secret-test",
           },
         })
       );
@@ -257,6 +282,19 @@ describe("usePioneroLiveKitRoom", () => {
       "2026-01-02T03:04:07.000Z"
     );
     expect(result.current.agentLlmReasonCode).toBe("");
+    expect(result.current.agentTtsProvider).toBe("cartesia");
+    expect(result.current.agentTtsStatus).toBe("speech_plan_built");
+    expect(result.current.agentTtsEnabled).toBe(true);
+    expect(result.current.agentTtsNetworkIo).toBe(false);
+    expect(result.current.agentTtsSpeechPlansCreated).toBe(1);
+    expect(result.current.agentTtsLastInputText).toBe("Turn plan pending real LLM.");
+    expect(result.current.agentTtsLastAudioPlan).toBe(
+      "TTS plan pending real synthesis."
+    );
+    expect(result.current.agentTtsLastObservedAt).toBe(
+      "2026-01-02T03:04:08.000Z"
+    );
+    expect(result.current.agentTtsReasonCode).toBe("");
     expect(result.current.session.token).toBeUndefined();
     expect(JSON.stringify(result.current.session)).not.toContain("token-test");
     expect(JSON.stringify(result.current)).not.toContain("agent-token-test");
@@ -270,6 +308,9 @@ describe("usePioneroLiveKitRoom", () => {
     expect(JSON.stringify(result.current)).not.toContain("llm-raw-audio-secret");
     expect(JSON.stringify(result.current)).not.toContain("llm-agent-token-test");
     expect(JSON.stringify(result.current)).not.toContain("llm-agent-secret-test");
+    expect(JSON.stringify(result.current)).not.toContain("tts-raw-audio-secret");
+    expect(JSON.stringify(result.current)).not.toContain("tts-agent-token-test");
+    expect(JSON.stringify(result.current)).not.toContain("tts-agent-secret-test");
   });
 
   it("uses safe default STT values when the agent start-plan omits STT state", async () => {
@@ -298,6 +339,35 @@ describe("usePioneroLiveKitRoom", () => {
     expect(result.current.agentSttLastTranscript).toBe("");
     expect(result.current.agentSttLastObservedAt).toBe("");
     expect(result.current.agentSttReasonCode).toBe("");
+  });
+
+  it("uses safe default TTS values when the agent start-plan omits TTS state", async () => {
+    const createPioneroLiveKitSession = vi.fn().mockResolvedValue(buildSession());
+    const startPioneroLiveKitAgentPlan = vi
+      .fn()
+      .mockResolvedValue(buildAgentPlan({ tts: undefined }));
+    mockLiveKit.createLocalAudioTrack.mockResolvedValue({ stop: vi.fn() });
+
+    const { result } = renderHook(() =>
+      usePioneroLiveKitRoom({
+        createPioneroLiveKitSession,
+        startPioneroLiveKitAgentPlan,
+      })
+    );
+
+    await act(async () => {
+      await result.current.connect();
+    });
+
+    expect(result.current.agentTtsProvider).toBe("cartesia");
+    expect(result.current.agentTtsStatus).toBe("idle");
+    expect(result.current.agentTtsEnabled).toBe(false);
+    expect(result.current.agentTtsNetworkIo).toBe(false);
+    expect(result.current.agentTtsSpeechPlansCreated).toBe(0);
+    expect(result.current.agentTtsLastInputText).toBe("");
+    expect(result.current.agentTtsLastAudioPlan).toBe("");
+    expect(result.current.agentTtsLastObservedAt).toBe("");
+    expect(result.current.agentTtsReasonCode).toBe("");
   });
 
   it("uses safe default LLM values when the agent start-plan omits LLM state", async () => {
