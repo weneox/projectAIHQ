@@ -1,4 +1,4 @@
-import {
+﻿import {
   randomUUID } from "crypto";
 import express from "express";
 import { AccessToken } from "livekit-server-sdk";
@@ -62,6 +62,7 @@ import {
   buildSonioxSpeechRuntimeConfig,
   createSonioxSpeechAdapter,
   buildPioneroLiveKitAgentPlan,
+  buildPioneroVoiceReadinessSnapshot,
   getPioneroLiveKitAgentRuntimeState,
   startPioneroLiveKitAgentRuntime,
   stopPioneroLiveKitAgentRuntime,
@@ -1876,6 +1877,23 @@ async function handlePioneroLiveKitAgentPlan(req, res) {
   }
 }
 
+async function handlePioneroVoiceReadiness(req, res) {
+  const logger = getRouteLogger(req, "voice.pionero.readiness");
+
+  try {
+    return ok(res, buildPioneroVoiceReadinessSnapshot());
+  } catch (err) {
+    logger.error("voice.pionero.readiness.failed", err);
+    recordVoiceRouteFailure({
+      route: "voice.pionero.readiness",
+      reasonCode: "pionero_voice_readiness_failed",
+      err,
+      req,
+    });
+    return fail(res, 500, "pionero_voice_readiness_failed");
+  }
+}
+
 function readPioneroLiveKitRoomClient(value = null) {
   if (typeof value === "function") {
     return {
@@ -2425,6 +2443,10 @@ export function voiceRoutes({
 
   r.get("/voice/pionero/livekit/agent/plan", requireOperatorSurfaceAccess, (req, res) =>
     handlePioneroLiveKitAgentPlan(req, res)
+  );
+
+  r.get("/voice/pionero/readiness", requireOperatorSurfaceAccess, (req, res) =>
+    handlePioneroVoiceReadiness(req, res)
   );
 
   r.post("/voice/pionero/livekit/agent/start-plan", requireOperatorSurfaceAccess, (req, res) =>
