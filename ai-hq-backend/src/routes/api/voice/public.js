@@ -2445,7 +2445,7 @@ export function voiceRoutes({
     handlePioneroLiveKitAgentPlan(req, res)
   );
 
-  r.get("/voice/pionero/readiness", requireOperatorSurfaceAccess, (req, res) =>
+  r.get("/voice/pionero/readiness", (req, res) =>
     handlePioneroVoiceReadiness(req, res)
   );
 

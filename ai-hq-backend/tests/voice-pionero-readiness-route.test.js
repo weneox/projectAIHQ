@@ -169,7 +169,7 @@ test("pionero voice readiness route reports configured stack without running smo
   );
 });
 
-test("pionero voice readiness route requires operator surface access", async () => {
+test("pionero voice readiness route is tenantless and diagnostic-only", async () => {
   const app = createVoiceApp({
     auth: {
       role: "member",
@@ -181,9 +181,10 @@ test("pionero voice readiness route requires operator surface access", async () 
     const response = await fetch(`${baseUrl}/voice/pionero/readiness`);
     const body = await response.json();
 
-    assert.equal(response.status, 403);
+    assert.equal(response.status, 200);
     assert.equal(body.ok, false);
-    assert.equal(body.error, "Forbidden");
-    assert.equal(body.reason, "operator surface access required");
+    assert.equal(body.status, "blocked");
+    assert.equal(Array.isArray(body.components), true);
+    assertNoCredentialLeak(body);
   });
 });
