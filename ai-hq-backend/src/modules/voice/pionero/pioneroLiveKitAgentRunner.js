@@ -462,8 +462,15 @@ function buildPioneroLlmState(input = {}) {
     ? "openai"
     : "fast_text_llm";
 
+  const model = s(input.model);
+  const errorMessage = normalizeSafeDiagnosticText(input.errorMessage);
+  const httpStatus = n(input.httpStatus);
+
   return {
     provider,
+    ...(model ? { model } : {}),
+    ...(errorMessage ? { errorMessage } : {}),
+    ...(httpStatus > 0 ? { httpStatus } : {}),
     enabled: input.enabled === true,
     status: PIONERO_LLM_STATUSES.has(status) ? status : "idle",
     turnsPlanned: n(input.turnsPlanned),
@@ -1151,6 +1158,7 @@ export function recordPioneroLlmTurnPlan(state = {}, input = {}, options = {}) {
     ...safeState,
     llm: {
       provider,
+      ...(s(payload.model || currentLlm.model) ? { model: s(payload.model || currentLlm.model) } : {}),
       enabled: true,
       status: "turn_plan_built",
       turnsPlanned: currentLlm.turnsPlanned + 1,
@@ -1621,9 +1629,13 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
     setLlmState({
       ...currentState.llm,
       provider: "openai",
+      model: s(composeResult?.model || currentState.llm?.model),
       enabled: true,
       status: "error",
       lastInputTranscript: transcript,
+      lastPlannedResponse: "",
+      errorMessage: s(composeResult?.errorMessage).slice(0, 500),
+      httpStatus: n(composeResult?.httpStatus),
       reasonCode: s(composeResult?.reasonCode, "openai_llm_response_failed"),
       networkIo: composeResult?.networkIo === true,
     });

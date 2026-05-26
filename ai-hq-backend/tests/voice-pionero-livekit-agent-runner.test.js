@@ -2101,6 +2101,7 @@ test("pionero LiveKit agent runner marks LLM error when OpenAI composer fails", 
     lastInputTranscript: "Salam Pionero",
     lastPlannedResponse: "",
     lastObservedAt: "",
+    errorMessage: "safe_failure",
     reasonCode: "openai_llm_response_failed",
     networkIo: true,
   });

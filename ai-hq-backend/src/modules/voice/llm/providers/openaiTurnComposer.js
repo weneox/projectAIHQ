@@ -216,6 +216,8 @@ export function createOpenAiTurnComposer({
             provider: "openai",
             networkIo: true,
             inputTranscript,
+            model: config.model,
+            httpStatus: Number(response?.status || 0) || 0,
             reasonCode: "openai_llm_response_failed",
             errorMessage: sanitizeErrorMessage(
               responsePayload?.error?.message ||
@@ -235,6 +237,8 @@ export function createOpenAiTurnComposer({
             provider: "openai",
             networkIo: true,
             inputTranscript,
+            model: config.model,
+            httpStatus: Number(response?.status || 0) || 0,
             reasonCode: "openai_llm_response_failed",
             errorMessage: "openai_response_text_missing",
           };
@@ -258,6 +262,8 @@ export function createOpenAiTurnComposer({
           provider: "openai",
           networkIo: true,
           inputTranscript,
+          model: config.model,
+          httpStatus: 0,
           reasonCode: "openai_llm_response_failed",
           errorMessage: sanitizeErrorMessage(err?.message || err, [apiKey]),
         };
