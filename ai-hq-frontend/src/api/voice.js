@@ -1,4 +1,4 @@
-import { apiGet, apiPost } from "./client.js";
+﻿import { apiGet, apiPost } from "./client.js";
 
 function qs(params = {}) {
   const sp = new URLSearchParams();
@@ -166,6 +166,10 @@ export async function getVoiceSpeechGatewayReadiness(params = {}) {
   return apiGet(`/api/voice/speech/gateway/readiness${qs(params)}`);
 }
 
+
+export async function getPioneroVoiceReadiness(params = {}) {
+  return apiGet("/api/voice/pionero/readiness" + qs(params));
+}
 export async function transcribeBrowserSpeech(body = {}) {
   if (!hasBrowserSpeechAudioInput(body)) {
     throw new Error("audio is required");
