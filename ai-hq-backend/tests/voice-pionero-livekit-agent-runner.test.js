@@ -6,6 +6,7 @@ import express from "express";
 import {
   buildPioneroLiveKitAgentRunnerState,
   createPioneroLiveKitAgentRunner,
+  normalizePioneroAudioFrameToPcmBuffer,
   recordPioneroAudioIngestEvent,
   recordPioneroAudioIngestFrame,
   recordPioneroLlmTurnPlan,
@@ -143,6 +144,9 @@ function assertDefaultSttIdle(stt = {}) {
     reasonCode: "stt_session_not_started",
     networkIo: false,
     framesBuffered: 0,
+    sttFramesDropped: 0,
+    sttFrameNormalizeFailed: 0,
+    sttPcmBytesBuffered: 0,
     flushesAttempted: 0,
     flushesSucceeded: 0,
     flushesFailed: 0,
@@ -298,6 +302,43 @@ test("pionero audio ingest helper counts frames and never stores raw audio", () 
   }));
   assertNoRawAudioLeak(state);
   assertNoSecretLeak(state, "test-helper-token-secret");
+});
+
+test("pionero PCM normalizer extracts Int16Array AudioFrame data", () => {
+  const samples = new Int16Array([1, -2, 32767]);
+  const pcm = normalizePioneroAudioFrameToPcmBuffer({
+    data: samples,
+    rawAudio: "raw-audio-secret",
+  });
+
+  assert.equal(Buffer.isBuffer(pcm), true);
+  assert.equal(pcm.byteLength, samples.byteLength);
+  assert.equal(pcm.readInt16LE(0), 1);
+  assert.equal(pcm.readInt16LE(2), -2);
+  assert.equal(pcm.readInt16LE(4), 32767);
+});
+
+test("pionero PCM normalizer converts float samples to signed 16-bit LE", () => {
+  const pcm = normalizePioneroAudioFrameToPcmBuffer({
+    data: new Float32Array([-1, 0, 1]),
+  });
+
+  assert.equal(Buffer.isBuffer(pcm), true);
+  assert.equal(pcm.byteLength, 6);
+  assert.equal(pcm.readInt16LE(0), -32768);
+  assert.equal(pcm.readInt16LE(2), 0);
+  assert.equal(pcm.readInt16LE(4), 32767);
+});
+
+test("pionero PCM normalizer preserves DataView and Uint8Array byte windows", () => {
+  const source = new Uint8Array([9, 1, 2, 3, 8]);
+  const dataViewPcm = normalizePioneroAudioFrameToPcmBuffer(
+    new DataView(source.buffer, 1, 3)
+  );
+  const uint8Pcm = normalizePioneroAudioFrameToPcmBuffer(source.subarray(2, 4));
+
+  assert.deepEqual([...dataViewPcm], [1, 2, 3]);
+  assert.deepEqual([...uint8Pcm], [2, 3]);
 });
 
 test("pionero audio ingest event helper stores safe diagnostics only", () => {
@@ -485,6 +526,9 @@ test("pionero STT transcript helper stores safe text only", () => {
     reasonCode: "",
     networkIo: true,
     framesBuffered: 0,
+    sttFramesDropped: 0,
+    sttFrameNormalizeFailed: 0,
+    sttPcmBytesBuffered: 0,
     flushesAttempted: 0,
     flushesSucceeded: 0,
     flushesFailed: 0,
@@ -1687,6 +1731,7 @@ test("pionero LiveKit agent runner flushes buffered audio into fake STT session"
         sttCalls.push({
           chunkCount: input.audioChunks?.length || 0,
           firstChunkBytes: input.audioChunks?.[0]?.byteLength || 0,
+          firstChunkIsBuffer: Buffer.isBuffer(input.audioChunks?.[0]),
           finalize: input.finalize,
         });
         return {
@@ -1718,7 +1763,8 @@ test("pionero LiveKit agent runner flushes buffered audio into fake STT session"
 
   await rooms[0].emit("testAudioFrame", {
     byteLength: 7,
-    data: "raw-audio-secret",
+    data: new Uint8Array([1, 2, 3, 4, 5, 6, 7]),
+    rawAudio: "raw-audio-secret",
   });
   await new Promise((resolve) => {
     setTimeout(resolve, 5);
@@ -1729,6 +1775,7 @@ test("pionero LiveKit agent runner flushes buffered audio into fake STT session"
   assert.equal(sttCalls.length, 1);
   assert.equal(sttCalls[0].chunkCount, 1);
   assert.equal(sttCalls[0].firstChunkBytes, 7);
+  assert.equal(sttCalls[0].firstChunkIsBuffer, true);
   assert.equal(sttCalls[0].finalize, true);
   assert.deepEqual(state.audioIngest, expectedAudioIngest({
     enabled: true,
@@ -1751,6 +1798,9 @@ test("pionero LiveKit agent runner flushes buffered audio into fake STT session"
     reasonCode: "",
     networkIo: true,
     framesBuffered: 0,
+    sttFramesDropped: 0,
+    sttFrameNormalizeFailed: 0,
+    sttPcmBytesBuffered: 0,
     flushesAttempted: 1,
     flushesSucceeded: 1,
     flushesFailed: 0,
@@ -1831,6 +1881,7 @@ test("pionero LiveKit agent runner bounds STT frame buffer", async () => {
       async transcribe(input = {}) {
         sttCalls.push({
           chunkCount: input.audioChunks?.length || 0,
+          firstChunkIsBuffer: Buffer.isBuffer(input.audioChunks?.[0]),
           finalize: input.finalize,
         });
         return {
@@ -1853,14 +1904,27 @@ test("pionero LiveKit agent runner bounds STT frame buffer", async () => {
   });
 
   await runner.start();
-  await rooms[0].emit("testAudioFrame", { byteLength: 1, data: "raw-audio-secret" });
-  await rooms[0].emit("testAudioFrame", { byteLength: 2, data: "raw-audio-secret" });
-  await rooms[0].emit("testAudioFrame", { byteLength: 3, data: "raw-audio-secret" });
+  await rooms[0].emit("testAudioFrame", {
+    byteLength: 1,
+    data: new Uint8Array([1]),
+    rawAudio: "raw-audio-secret",
+  });
+  await rooms[0].emit("testAudioFrame", {
+    byteLength: 2,
+    data: new Uint8Array([1, 2]),
+    rawAudio: "raw-audio-secret",
+  });
+  await rooms[0].emit("testAudioFrame", {
+    byteLength: 3,
+    data: new Uint8Array([1, 2, 3]),
+    rawAudio: "raw-audio-secret",
+  });
 
   const state = runner.getState();
 
   assert.equal(state.audioIngest.framesObserved, 3);
   assert.equal(state.stt.framesBuffered, 2);
+  assert.equal(state.stt.sttPcmBytesBuffered, 5);
   assert.equal(state.stt.flushesAttempted, 0);
   assert.equal(sttCalls.length, 0);
 
@@ -1870,6 +1934,100 @@ test("pionero LiveKit agent runner bounds STT frame buffer", async () => {
   assert.equal(sttCalls[0].chunkCount, 2);
   assertNoSecretLeak(runner.getState(), "test-agent-token-secret");
   assertNoRawAudioLeak(runner.getState());
+});
+
+test("pionero LiveKit agent runner drops malformed STT frames without calling Soniox", async () => {
+  const rooms = [];
+  let transcribeCalls = 0;
+
+  class FakeRoom {
+    constructor() {
+      this.handlers = new Map();
+      rooms.push(this);
+    }
+
+    async connect() {}
+
+    on(eventName, handler) {
+      const handlers = this.handlers.get(eventName) || new Set();
+      handlers.add(handler);
+      this.handlers.set(eventName, handlers);
+      return this;
+    }
+
+    off(eventName, handler) {
+      this.handlers.get(eventName)?.delete(handler);
+      return this;
+    }
+
+    async emit(eventName, ...args) {
+      const results = [];
+      this.handlers.get(eventName)?.forEach((handler) => {
+        results.push(handler(...args));
+      });
+      await Promise.all(results);
+    }
+  }
+
+  const runner = createPioneroLiveKitAgentRunner({
+    RoomClass: FakeRoom,
+    audioIngestEventNames: ["testAudioFrame"],
+    createAgentToken: async () => ({
+      provider: "livekit",
+      url: "wss://livekit.example.test",
+      roomName: "pionero-demo-room",
+      agentIdentity: "aihq-pionero-agent",
+      agentName: "AIHQ Pionero Agent",
+      token: "test-agent-token-secret",
+    }),
+    createSttSession: async () => ({
+      async transcribe() {
+        transcribeCalls += 1;
+        return {
+          ok: true,
+          status: "transcribed",
+          provider: "soniox",
+          stage: "stt",
+          text: "Should not happen",
+        };
+      },
+    }),
+    env: createLiveKitEnv({
+      PIONERO_LIVEKIT_STT_ENABLED: "true",
+      PIONERO_LIVEKIT_STT_FLUSH_MS: "1",
+    }),
+    logger: createTestLogger(),
+    now: () => new Date("2026-01-02T03:04:05.000Z"),
+    roomName: "pionero-demo-room",
+  });
+
+  await runner.start();
+  await rooms[0].emit("testAudioFrame", {
+    byteLength: 7,
+    rawAudio: "raw-audio-secret",
+    token: "test-frame-token-secret",
+  });
+  await new Promise((resolve) => {
+    setTimeout(resolve, 5);
+  });
+
+  const state = runner.getState();
+
+  assert.equal(transcribeCalls, 0);
+  assert.equal(state.audioIngest.framesObserved, 1);
+  assert.equal(state.audioIngest.bytesObserved, 7);
+  assert.equal(state.stt.framesBuffered, 0);
+  assert.equal(state.stt.sttFramesDropped, 1);
+  assert.equal(state.stt.sttFrameNormalizeFailed, 1);
+  assert.equal(state.stt.sttPcmBytesBuffered, 0);
+  assert.equal(state.stt.lastFlushReasonCode, "stt_frame_pcm_normalize_failed");
+  assert.equal(state.stt.reasonCode, "stt_frame_pcm_normalize_failed");
+  assert.equal(state.stt.flushesAttempted, 0);
+  assertNoSecretLeak(state, "test-agent-token-secret");
+  assertNoSecretLeak(state, "test-frame-token-secret");
+  assertNoRawAudioLeak(state);
+
+  await runner.stop();
 });
 
 test("pionero LiveKit agent runner prevents parallel STT flushes", async () => {
@@ -1946,11 +2104,19 @@ test("pionero LiveKit agent runner prevents parallel STT flushes", async () => {
   });
 
   await runner.start();
-  await rooms[0].emit("testAudioFrame", { byteLength: 1, data: "raw-audio-secret" });
+  await rooms[0].emit("testAudioFrame", {
+    byteLength: 1,
+    data: new Uint8Array([1]),
+    rawAudio: "raw-audio-secret",
+  });
   await new Promise((resolve) => {
     setTimeout(resolve, 5);
   });
-  await rooms[0].emit("testAudioFrame", { byteLength: 2, data: "raw-audio-secret" });
+  await rooms[0].emit("testAudioFrame", {
+    byteLength: 2,
+    data: new Uint8Array([1, 2]),
+    rawAudio: "raw-audio-secret",
+  });
   await new Promise((resolve) => {
     setTimeout(resolve, 5);
   });
@@ -2032,6 +2198,7 @@ test("pionero LiveKit agent runner performs final STT flush on stop", async () =
       async transcribe(input = {}) {
         sttCalls.push({
           chunkCount: input.audioChunks?.length || 0,
+          firstChunkIsBuffer: Buffer.isBuffer(input.audioChunks?.[0]),
           finalize: input.finalize,
         });
         return {
@@ -2058,7 +2225,8 @@ test("pionero LiveKit agent runner performs final STT flush on stop", async () =
   await runner.start();
   await rooms[0].emit("testAudioFrame", {
     byteLength: 7,
-    data: "raw-audio-secret",
+    data: new Uint8Array([1, 2, 3, 4, 5, 6, 7]),
+    rawAudio: "raw-audio-secret",
   });
 
   assert.equal(sttCalls.length, 0);
@@ -2067,6 +2235,7 @@ test("pionero LiveKit agent runner performs final STT flush on stop", async () =
 
   assert.equal(sttCalls.length, 1);
   assert.equal(sttCalls[0].chunkCount, 1);
+  assert.equal(sttCalls[0].firstChunkIsBuffer, true);
   assert.equal(sttCalls[0].finalize, true);
   assert.equal(stoppedState.status, "stopped");
   assert.equal(stoppedState.stt.status, "idle");
@@ -2076,6 +2245,7 @@ test("pionero LiveKit agent runner performs final STT flush on stop", async () =
   assert.equal(stoppedState.stt.flushesAttempted, 1);
   assert.equal(stoppedState.stt.flushesSucceeded, 1);
   assert.equal(stoppedState.stt.flushesFailed, 0);
+  assert.equal(stoppedState.stt.sttPcmBytesBuffered, 0);
   assert.equal(stoppedState.stt.lastFlushReasonCode, "stt_final_flush");
   assertNoSecretLeak(stoppedState, "test-agent-token-secret");
   assertNoRawAudioLeak(stoppedState);
@@ -2149,7 +2319,8 @@ test("pionero LiveKit agent runner does not plan LLM turn without STT transcript
 
   await rooms[0].emit("testAudioFrame", {
     byteLength: 7,
-    data: "raw-audio-secret",
+    data: new Uint8Array([1, 2, 3, 4, 5, 6, 7]),
+    rawAudio: "raw-audio-secret",
   });
 
   const state = runner.getState();

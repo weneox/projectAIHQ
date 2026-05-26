@@ -78,6 +78,9 @@ function assertDefaultMonitorShape(result = {}, reasonCode = "") {
     audioIngestStatus: "",
     sttStatus: "",
     sttFramesBuffered: 0,
+    sttFramesDropped: 0,
+    sttFrameNormalizeFailed: 0,
+    sttPcmBytesBuffered: 0,
     sttFlushesAttempted: 0,
     sttFlushesSucceeded: 0,
     sttFlushesFailed: 0,
@@ -184,6 +187,9 @@ test("pionero live audio monitor reports missing config with booleans only", asy
     audioIngestStatus: "",
     sttStatus: "",
     sttFramesBuffered: 0,
+    sttFramesDropped: 0,
+    sttFrameNormalizeFailed: 0,
+    sttPcmBytesBuffered: 0,
     sttFlushesAttempted: 0,
     sttFlushesSucceeded: 0,
     sttFlushesFailed: 0,
@@ -265,6 +271,9 @@ test("pionero live audio monitor connected runner output includes diagnostics", 
             stt: {
               status: "idle",
               framesBuffered: 0,
+              sttFramesDropped: 0,
+              sttFrameNormalizeFailed: 0,
+              sttPcmBytesBuffered: 0,
               flushesAttempted: 0,
               flushesSucceeded: 0,
               flushesFailed: 0,
@@ -320,6 +329,9 @@ test("pionero live audio monitor connected runner output includes diagnostics", 
             stt: {
               status: "transcript_observed",
               framesBuffered: 0,
+              sttFramesDropped: 1,
+              sttFrameNormalizeFailed: 1,
+              sttPcmBytesBuffered: 0,
               flushesAttempted: 1,
               flushesSucceeded: 1,
               flushesFailed: 0,
@@ -384,6 +396,9 @@ test("pionero live audio monitor connected runner output includes diagnostics", 
   assert.equal(result.audioIngestStatus, "audio_observed");
   assert.equal(result.sttStatus, "transcript_observed");
   assert.equal(result.sttFramesBuffered, 0);
+  assert.equal(result.sttFramesDropped, 1);
+  assert.equal(result.sttFrameNormalizeFailed, 1);
+  assert.equal(result.sttPcmBytesBuffered, 0);
   assert.equal(result.sttFlushesAttempted, 1);
   assert.equal(result.sttFlushesSucceeded, 1);
   assert.equal(result.sttFlushesFailed, 0);

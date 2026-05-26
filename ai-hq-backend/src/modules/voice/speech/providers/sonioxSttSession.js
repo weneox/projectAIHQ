@@ -38,9 +38,35 @@ function sendJson(socket, payload) {
   return true;
 }
 
+function normalizeAudioChunkToBuffer(chunk) {
+  if (chunk === undefined || chunk === null) return null;
+  if (Buffer.isBuffer(chunk)) return chunk;
+  if (typeof chunk === "string") return Buffer.from(chunk);
+
+  if (chunk instanceof ArrayBuffer) {
+    return Buffer.from(chunk);
+  }
+
+  if (ArrayBuffer.isView(chunk)) {
+    return Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength);
+  }
+
+  return null;
+}
+
 function sendAudioChunk(socket, chunk) {
   if (!socket || chunk === undefined || chunk === null) return false;
-  socket.send(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  const buffer = normalizeAudioChunkToBuffer(chunk);
+
+  if (!buffer) return false;
+
+  socket.send(buffer);
+  return true;
+}
+
+function sendEndOfAudio(socket) {
+  if (!socket || typeof socket.send !== "function") return false;
+  socket.send("");
   return true;
 }
 
@@ -229,6 +255,7 @@ export function createSonioxSttSession({
 
         if (finalize) {
           sendJson(socket, { type: "finalize" });
+          sendEndOfAudio(socket);
         }
 
         const transcriptResult = await waitForSttTranscript({

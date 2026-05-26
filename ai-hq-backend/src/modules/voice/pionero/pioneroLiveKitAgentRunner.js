@@ -290,6 +290,61 @@ function readNowISOString(now = null) {
   return date.toISOString();
 }
 
+function isArrayBufferLike(value) {
+  return value instanceof ArrayBuffer ||
+    Object.prototype.toString.call(value) === "[object ArrayBuffer]";
+}
+
+function convertFloatSamplesToPcm16Buffer(samples) {
+  const buffer = Buffer.alloc(samples.length * 2);
+
+  for (let index = 0; index < samples.length; index += 1) {
+    const sample = Number.isFinite(samples[index]) ? samples[index] : 0;
+    const clamped = Math.max(-1, Math.min(1, sample));
+    const pcm = clamped < 0
+      ? Math.round(clamped * 0x8000)
+      : Math.round(clamped * 0x7fff);
+
+    buffer.writeInt16LE(Math.max(-32768, Math.min(32767, pcm)), index * 2);
+  }
+
+  return buffer;
+}
+
+export function normalizePioneroAudioFrameToPcmBuffer(frame, seen = new Set()) {
+  if (frame === null || frame === undefined) return null;
+  if (Buffer.isBuffer(frame)) return frame;
+  if (typeof frame === "string") return null;
+
+  if (isArrayBufferLike(frame)) {
+    return Buffer.from(frame);
+  }
+
+  if (ArrayBuffer.isView(frame)) {
+    if (frame instanceof Float32Array || frame instanceof Float64Array) {
+      return convertFloatSamplesToPcm16Buffer(frame);
+    }
+
+    return Buffer.from(frame.buffer, frame.byteOffset, frame.byteLength);
+  }
+
+  if (typeof frame !== "object") return null;
+  if (seen.has(frame)) return null;
+  seen.add(frame);
+
+  for (const key of ["data", "audio", "audioFrame", "chunk", "frame"]) {
+    const nested = frame[key];
+
+    if (nested && nested !== frame) {
+      const buffer = normalizePioneroAudioFrameToPcmBuffer(nested, seen);
+
+      if (buffer) return buffer;
+    }
+  }
+
+  return null;
+}
+
 function readFrameByteLength(frame) {
   if (frame === null || frame === undefined) return 0;
 
@@ -384,6 +439,9 @@ function buildPioneroSttState(input = {}) {
     reasonCode: s(input.reasonCode),
     networkIo: input.networkIo === true,
     framesBuffered: n(input.framesBuffered),
+    sttFramesDropped: n(input.sttFramesDropped),
+    sttFrameNormalizeFailed: n(input.sttFrameNormalizeFailed),
+    sttPcmBytesBuffered: n(input.sttPcmBytesBuffered),
     flushesAttempted: n(input.flushesAttempted),
     flushesSucceeded: n(input.flushesSucceeded),
     flushesFailed: n(input.flushesFailed),
@@ -546,6 +604,9 @@ function readInitialStt(input = {}) {
     reasonCode: "stt_session_not_started",
     networkIo: false,
     framesBuffered: 0,
+    sttFramesDropped: 0,
+    sttFrameNormalizeFailed: 0,
+    sttPcmBytesBuffered: 0,
     flushesAttempted: 0,
     flushesSucceeded: 0,
     flushesFailed: 0,
@@ -1303,6 +1364,13 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
     sttFlushTimer = null;
   }
 
+  function readSttPcmBytesBuffered() {
+    return sttFrameBuffer.reduce(
+      (total, chunk) => total + n(chunk?.byteLength),
+      0
+    );
+  }
+
   function updateBufferedSttState({
     status = "streaming",
     reasonCode = "stt_frames_buffered",
@@ -1315,6 +1383,7 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
       status,
       reasonCode,
       framesBuffered: sttFrameBuffer.length,
+      sttPcmBytesBuffered: readSttPcmBytesBuffered(),
     });
   }
 
@@ -1436,6 +1505,7 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
         status: "streaming",
         reasonCode: "",
         framesBuffered: 0,
+        sttPcmBytesBuffered: 0,
         flushesAttempted: startingStt.flushesAttempted + 1,
         lastFlushReasonCode: reasonCode,
       });
@@ -1454,6 +1524,7 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
         setSttState({
           ...currentStt,
           framesBuffered: sttFrameBuffer.length,
+          sttPcmBytesBuffered: readSttPcmBytesBuffered(),
           flushesSucceeded: currentStt.flushesSucceeded + (failed ? 0 : 1),
           flushesFailed: currentStt.flushesFailed + (failed ? 1 : 0),
           lastFlushReasonCode: failed
@@ -1477,6 +1548,7 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
           enabled: true,
           status: "error",
           framesBuffered: sttFrameBuffer.length,
+          sttPcmBytesBuffered: readSttPcmBytesBuffered(),
           flushesFailed: currentStt.flushesFailed + 1,
           lastFlushReasonCode: "stt_flush_failed",
           reasonCode: "stt_flush_failed",
@@ -1512,7 +1584,25 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
   function bufferSttFrame(frame) {
     if (!sttSession) return currentState;
 
-    sttFrameBuffer.push(frame);
+    const pcmBuffer = normalizePioneroAudioFrameToPcmBuffer(frame);
+
+    if (!pcmBuffer || pcmBuffer.byteLength <= 0) {
+      const currentStt = buildPioneroSttState(currentState.stt);
+
+      return setSttState({
+        ...currentStt,
+        enabled: true,
+        status: currentStt.status === "idle" ? "waiting_for_audio" : currentStt.status,
+        reasonCode: "stt_frame_pcm_normalize_failed",
+        framesBuffered: sttFrameBuffer.length,
+        sttFramesDropped: currentStt.sttFramesDropped + 1,
+        sttFrameNormalizeFailed: currentStt.sttFrameNormalizeFailed + 1,
+        sttPcmBytesBuffered: readSttPcmBytesBuffered(),
+        lastFlushReasonCode: "stt_frame_pcm_normalize_failed",
+      });
+    }
+
+    sttFrameBuffer.push(pcmBuffer);
 
     if (sttFrameBuffer.length > sttMaxFrames) {
       sttFrameBuffer.splice(0, sttFrameBuffer.length - sttMaxFrames);
