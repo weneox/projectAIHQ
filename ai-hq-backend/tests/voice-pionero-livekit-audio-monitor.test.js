@@ -87,7 +87,12 @@ function assertDefaultMonitorShape(result = {}, reasonCode = "") {
     sttLastFlushReasonCode: "",
     transcriptsObserved: 0,
     lastTranscript: "",
+    llmProvider: "",
     llmStatus: "",
+    llmNetworkIo: false,
+    llmTurnsPlanned: 0,
+    lastInputTranscript: "",
+    lastPlannedResponse: "",
     ttsStatus: "",
   });
 }
@@ -196,7 +201,12 @@ test("pionero live audio monitor reports missing config with booleans only", asy
     sttLastFlushReasonCode: "",
     transcriptsObserved: 0,
     lastTranscript: "",
+    llmProvider: "",
     llmStatus: "",
+    llmNetworkIo: false,
+    llmTurnsPlanned: 0,
+    lastInputTranscript: "",
+    lastPlannedResponse: "",
     ttsStatus: "",
     missing: {
       livekitUrl: true,
@@ -282,7 +292,12 @@ test("pionero live audio monitor connected runner output includes diagnostics", 
               lastTranscript: "",
             },
             llm: {
+              provider: "fast_text_llm",
               status: "planned",
+              networkIo: false,
+              turnsPlanned: 0,
+              lastInputTranscript: "",
+              lastPlannedResponse: "",
             },
             tts: {
               status: "planned",
@@ -340,7 +355,12 @@ test("pionero live audio monitor connected runner output includes diagnostics", 
               lastTranscript: "Salam Pionero",
             },
             llm: {
-              status: "planned",
+              provider: "openai",
+              status: "turn_plan_built",
+              networkIo: true,
+              turnsPlanned: 1,
+              lastInputTranscript: "Salam Pionero",
+              lastPlannedResponse: "Buyurun.",
             },
             tts: {
               status: "planned",
@@ -405,7 +425,12 @@ test("pionero live audio monitor connected runner output includes diagnostics", 
   assert.equal(result.sttLastFlushReasonCode, "stt_final_flush");
   assert.equal(result.transcriptsObserved, 1);
   assert.equal(result.lastTranscript, "Salam Pionero");
-  assert.equal(result.llmStatus, "planned");
+  assert.equal(result.llmProvider, "openai");
+  assert.equal(result.llmStatus, "turn_plan_built");
+  assert.equal(result.llmNetworkIo, true);
+  assert.equal(result.llmTurnsPlanned, 1);
+  assert.equal(result.lastInputTranscript, "Salam Pionero");
+  assert.equal(result.lastPlannedResponse, "Buyurun.");
   assert.equal(result.ttsStatus, "planned");
   assert.deepEqual(waitCalls, [1000, 1000, 1000]);
   assert.equal(snapshotCalls, 3);
@@ -481,7 +506,14 @@ test("pionero live audio monitor reports successful flushes without fake transcr
             rawAudio: "rawAudio-secret",
             token: "token-secret",
           },
-          llm: { status: "planned" },
+          llm: {
+            provider: "fast_text_llm",
+            status: "planned",
+            networkIo: false,
+            turnsPlanned: 0,
+            lastInputTranscript: "",
+            lastPlannedResponse: "",
+          },
           tts: { status: "planned" },
         };
       },
@@ -500,7 +532,12 @@ test("pionero live audio monitor reports successful flushes without fake transcr
   assert.equal(result.sttFlushesFailed, 0);
   assert.equal(result.transcriptsObserved, 0);
   assert.equal(result.lastTranscript, "");
+  assert.equal(result.llmProvider, "fast_text_llm");
   assert.equal(result.llmStatus, "planned");
+  assert.equal(result.llmNetworkIo, false);
+  assert.equal(result.llmTurnsPlanned, 0);
+  assert.equal(result.lastInputTranscript, "");
+  assert.equal(result.lastPlannedResponse, "");
   assert.equal(result.ttsStatus, "planned");
   assert.equal(stopCalled, true);
   assertNoUnsafeOutputLeak(result);

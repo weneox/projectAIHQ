@@ -8,6 +8,9 @@ import {
 import {
   createSonioxSttSession,
 } from "../speech/providers/sonioxSttSession.js";
+import {
+  createOpenAiTurnComposer,
+} from "../llm/providers/openaiTurnComposer.js";
 import { s } from "../shared.js";
 
 export const PIONERO_LIVEKIT_AGENT_RUNNER_VERSION = "pionero_livekit_agent_runner.v1";
@@ -455,9 +458,12 @@ function buildPioneroSttState(input = {}) {
 
 function buildPioneroLlmState(input = {}) {
   const status = s(input.status, "idle");
+  const provider = s(input.provider, "fast_text_llm") === "openai"
+    ? "openai"
+    : "fast_text_llm";
 
   return {
-    provider: "fast_text_llm",
+    provider,
     enabled: input.enabled === true,
     status: PIONERO_LLM_STATUSES.has(status) ? status : "idle",
     turnsPlanned: n(input.turnsPlanned),
@@ -465,7 +471,7 @@ function buildPioneroLlmState(input = {}) {
     lastPlannedResponse: s(input.lastPlannedResponse || input.plannedResponse).slice(0, 2_000),
     lastObservedAt: s(input.lastObservedAt),
     reasonCode: s(input.reasonCode),
-    networkIo: false,
+    networkIo: provider === "openai" && input.networkIo === true,
   };
 }
 
@@ -1118,6 +1124,9 @@ export function recordPioneroLlmTurnPlan(state = {}, input = {}, options = {}) {
   const safeState = safeStateObject(state);
   const currentLlm = buildPioneroLlmState(safeState.llm);
   const payload = typeof input === "string" ? { transcript: input } : obj(input);
+  const provider = s(payload.provider || currentLlm.provider, "fast_text_llm") === "openai"
+    ? "openai"
+    : "fast_text_llm";
   const transcript = s(
     payload.transcript ||
       payload.inputTranscript ||
@@ -1141,7 +1150,7 @@ export function recordPioneroLlmTurnPlan(state = {}, input = {}, options = {}) {
   return {
     ...safeState,
     llm: {
-      provider: "fast_text_llm",
+      provider,
       enabled: true,
       status: "turn_plan_built",
       turnsPlanned: currentLlm.turnsPlanned + 1,
@@ -1154,7 +1163,7 @@ export function recordPioneroLlmTurnPlan(state = {}, input = {}, options = {}) {
         readNowISOString(options.now)
       ),
       reasonCode: "",
-      networkIo: false,
+      networkIo: provider === "openai" && payload.networkIo === true,
     },
   };
 }
@@ -1278,6 +1287,7 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
     TrackSource = null,
     audioIngestEventNames = [],
     createAgentToken = createPioneroLiveKitAgentToken,
+    createLlmTurnComposer = null,
     createSttSession = null,
     env = process.env,
     logger = null,
@@ -1291,6 +1301,7 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
     TrackKind,
     TrackSource,
   };
+  const llmEnabled = isEnabled(env.PIONERO_LIVEKIT_LLM_ENABLED);
   const sttEnabled = isEnabled(env.PIONERO_LIVEKIT_STT_ENABLED);
   const sttMaxFrames = readBoundedInteger(
     env.PIONERO_LIVEKIT_STT_MAX_FRAMES,
@@ -1309,6 +1320,8 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
   let sttFrameBuffer = [];
   let sttFlushTimer = null;
   let sttFlushPromise = null;
+  let llmTurnComposer = null;
+  let llmTurnComposerResolved = false;
   let currentState = buildPioneroLiveKitAgentRunnerState({
     env,
     roomName,
@@ -1352,6 +1365,15 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
     currentState = {
       ...safeStateObject(currentState),
       stt: buildPioneroSttState(nextStt),
+    };
+
+    return currentState;
+  }
+
+  function setLlmState(nextLlm = {}) {
+    currentState = {
+      ...safeStateObject(currentState),
+      llm: buildPioneroLlmState(nextLlm),
     };
 
     return currentState;
@@ -1471,21 +1493,140 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
     };
   }
 
-  function recordTranscriptTurnPlans(transcriptResult = {}) {
+  async function getLlmTurnComposer() {
+    if (!llmEnabled) return null;
+    if (llmTurnComposerResolved) return llmTurnComposer;
+
+    llmTurnComposerResolved = true;
+
+    try {
+      const composer = createLlmTurnComposer
+        ? await createLlmTurnComposer({
+            env,
+            logger,
+            now,
+            roomName,
+          })
+        : createOpenAiTurnComposer({
+            env,
+            now,
+          });
+      const reasonCode = s(
+        composer?.reasonCode || composer?.config?.reasonCode,
+        composer?.enabled === false
+          ? "pionero_llm_disabled"
+          : "openai_api_key_missing"
+      );
+
+      if (
+        !composer ||
+        composer.ok === false ||
+        composer.configured === false ||
+        composer.enabled === false
+      ) {
+        setLlmState({
+          ...currentState.llm,
+          provider: "openai",
+          enabled: false,
+          status: "error",
+          reasonCode,
+          networkIo: composer?.networkIo === true,
+        });
+
+        return null;
+      }
+
+      llmTurnComposer = composer;
+      return llmTurnComposer;
+    } catch {
+      logger?.warn?.("pionero.livekit.agent_runner.llm_composer_unavailable", {
+        reasonCode: "openai_llm_composer_unavailable",
+        error: null,
+      });
+      setLlmState({
+        ...currentState.llm,
+        provider: "openai",
+        enabled: false,
+        status: "error",
+        reasonCode: "openai_llm_composer_unavailable",
+        networkIo: false,
+      });
+
+      return null;
+    }
+  }
+
+  async function recordTranscriptTurnPlans(transcriptResult = {}) {
     if (isFailedTranscriptResult(transcriptResult)) return;
 
     const transcript = readTranscriptText(transcriptResult);
 
     if (!transcript) return;
 
-    currentState = recordPioneroLlmTurnPlan(currentState, {
-      transcript,
-      plannedResponse: obj(transcriptResult).plannedResponse,
-    }, { now });
+    if (!llmEnabled) {
+      currentState = recordPioneroLlmTurnPlan(currentState, {
+        transcript,
+        plannedResponse: obj(transcriptResult).plannedResponse,
+      }, { now });
 
-    currentState = recordPioneroTtsPlan(currentState, {
-      text: currentState.llm?.lastPlannedResponse,
-    }, { now });
+      currentState = recordPioneroTtsPlan(currentState, {
+        text: currentState.llm?.lastPlannedResponse,
+      }, { now });
+
+      return;
+    }
+
+    const composer = await getLlmTurnComposer();
+
+    if (!composer || typeof composer.composeTurn !== "function") return;
+
+    let composeResult = null;
+
+    try {
+      composeResult = await composer.composeTurn({
+        transcript,
+        roomName,
+      });
+    } catch {
+      composeResult = {
+        ok: false,
+        provider: "openai",
+        networkIo: true,
+        reasonCode: "openai_llm_response_failed",
+      };
+    }
+
+    const responseText = s(
+      composeResult?.responseText ||
+        composeResult?.text ||
+        composeResult?.plannedResponse
+    ).slice(0, 2_000);
+
+    if (composeResult?.ok === true && responseText) {
+      currentState = recordPioneroLlmTurnPlan(currentState, {
+        provider: "openai",
+        transcript,
+        responseText,
+        plannedAt: composeResult.composedAt,
+        networkIo: composeResult.networkIo === true,
+      }, { now });
+
+      currentState = recordPioneroTtsPlan(currentState, {
+        text: currentState.llm?.lastPlannedResponse,
+      }, { now });
+
+      return;
+    }
+
+    setLlmState({
+      ...currentState.llm,
+      provider: "openai",
+      enabled: true,
+      status: "error",
+      lastInputTranscript: transcript,
+      reasonCode: s(composeResult?.reasonCode, "openai_llm_response_failed"),
+      networkIo: composeResult?.networkIo === true,
+    });
   }
 
   async function flushSttFrameBuffer(reasonCode = "stt_flush_interval") {
@@ -1535,7 +1676,7 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
             : currentStt.reasonCode,
         });
 
-        recordTranscriptTurnPlans(transcriptResult);
+        await recordTranscriptTurnPlans(transcriptResult);
       } catch (err) {
         logger?.warn?.("pionero.livekit.agent_runner.stt_flush_failed", {
           reasonCode: "stt_flush_failed",
