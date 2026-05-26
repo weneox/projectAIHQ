@@ -1684,6 +1684,7 @@ test("pionero LiveKit agent runner blocks gated Soniox STT when api key is missi
 test("pionero LiveKit agent runner flushes buffered audio into fake STT session", async () => {
   const rooms = [];
   const sttCalls = [];
+  let llmComposerCalls = 0;
 
   class FakeRoom {
     constructor() {
@@ -1747,6 +1748,20 @@ test("pionero LiveKit agent runner flushes buffered audio into fake STT session"
         };
       },
     }),
+    createLlmTurnComposer: async () => {
+      llmComposerCalls += 1;
+      return {
+        provider: "openai",
+        configured: true,
+        enabled: true,
+        async composeTurn() {
+          return {
+            ok: true,
+            responseText: "Should not be used while disabled.",
+          };
+        },
+      };
+    },
     env: createLiveKitEnv({
       PIONERO_LIVEKIT_STT_ENABLED: "1",
       PIONERO_LIVEKIT_STT_FLUSH_MS: "1",
@@ -1777,6 +1792,7 @@ test("pionero LiveKit agent runner flushes buffered audio into fake STT session"
   assert.equal(sttCalls[0].firstChunkBytes, 7);
   assert.equal(sttCalls[0].firstChunkIsBuffer, true);
   assert.equal(sttCalls[0].finalize, true);
+  assert.equal(llmComposerCalls, 0);
   assert.deepEqual(state.audioIngest, expectedAudioIngest({
     enabled: true,
     status: "audio_observed",
@@ -1833,9 +1849,272 @@ test("pionero LiveKit agent runner flushes buffered audio into fake STT session"
   assertNoRawAudioLeak(state);
 });
 
+test("pionero LiveKit agent runner composes OpenAI turn when gated LLM is enabled", async () => {
+  const rooms = [];
+  const sttCalls = [];
+  const composeCalls = [];
+
+  class FakeRoom {
+    constructor() {
+      this.handlers = new Map();
+      rooms.push(this);
+    }
+
+    async connect() {}
+
+    on(eventName, handler) {
+      const handlers = this.handlers.get(eventName) || new Set();
+      handlers.add(handler);
+      this.handlers.set(eventName, handlers);
+      return this;
+    }
+
+    off(eventName, handler) {
+      this.handlers.get(eventName)?.delete(handler);
+      return this;
+    }
+
+    async emit(eventName, ...args) {
+      const results = [];
+      this.handlers.get(eventName)?.forEach((handler) => {
+        results.push(handler(...args));
+      });
+      await Promise.all(results);
+    }
+  }
+
+  const runner = createPioneroLiveKitAgentRunner({
+    RoomClass: FakeRoom,
+    audioIngestEventNames: ["testAudioFrame"],
+    createAgentToken: async () => ({
+      provider: "livekit",
+      url: "wss://livekit.example.test",
+      roomName: "pionero-demo-room",
+      agentIdentity: "aihq-pionero-agent",
+      agentName: "AIHQ Pionero Agent",
+      token: "test-agent-token-secret",
+    }),
+    createSttSession: async () => ({
+      provider: "soniox",
+      async transcribe(input = {}) {
+        sttCalls.push({
+          chunkCount: input.audioChunks?.length || 0,
+          finalize: input.finalize,
+        });
+        return {
+          ok: true,
+          status: "transcribed",
+          provider: "soniox",
+          stage: "stt",
+          text: "1-2-3.",
+          transcribedAt: "2026-01-02T03:04:06.000Z",
+          networkIo: true,
+          rawAudio: "raw-audio-secret",
+        };
+      },
+    }),
+    createLlmTurnComposer: async ({ env, roomName }) => {
+      assert.equal(env.PIONERO_LIVEKIT_LLM_ENABLED, "true");
+      assert.equal(roomName, "pionero-demo-room");
+
+      return {
+        provider: "openai",
+        configured: true,
+        enabled: true,
+        async composeTurn(input = {}) {
+          composeCalls.push(input);
+          return {
+            ok: true,
+            status: "composed",
+            provider: "openai",
+            model: "gpt-test",
+            networkIo: true,
+            inputTranscript: input.transcript,
+            responseText: "Sure, I heard 1-2-3.",
+            composedAt: "2026-01-02T03:04:07.000Z",
+            token: "test-openai-token-secret",
+            rawAudio: "raw-audio-secret",
+          };
+        },
+      };
+    },
+    env: createLiveKitEnv({
+      PIONERO_LIVEKIT_STT_ENABLED: "1",
+      PIONERO_LIVEKIT_STT_FLUSH_MS: "1",
+      PIONERO_LIVEKIT_LLM_ENABLED: "true",
+    }),
+    logger: createTestLogger(),
+    now: () => new Date("2026-01-02T03:04:05.000Z"),
+    roomName: "pionero-demo-room",
+  });
+
+  await runner.start();
+  await rooms[0].emit("testAudioFrame", {
+    byteLength: 7,
+    data: new Uint8Array([1, 2, 3, 4, 5, 6, 7]),
+    rawAudio: "raw-audio-secret",
+  });
+  await new Promise((resolve) => {
+    setTimeout(resolve, 5);
+  });
+
+  const state = runner.getState();
+
+  assert.equal(sttCalls.length, 1);
+  assert.deepEqual(composeCalls, [
+    {
+      transcript: "1-2-3.",
+      roomName: "pionero-demo-room",
+    },
+  ]);
+  assert.deepEqual(state.llm, {
+    provider: "openai",
+    enabled: true,
+    status: "turn_plan_built",
+    turnsPlanned: 1,
+    lastInputTranscript: "1-2-3.",
+    lastPlannedResponse: "Sure, I heard 1-2-3.",
+    lastObservedAt: "2026-01-02T03:04:07.000Z",
+    reasonCode: "",
+    networkIo: true,
+  });
+  assert.equal(state.tts.status, "speech_plan_built");
+  assert.equal(state.tts.lastInputText, "Sure, I heard 1-2-3.");
+  assert.equal(state.tts.networkIo, false);
+  assertNoSecretLeak(state, "test-agent-token-secret");
+  assertNoSecretLeak(state, "test-openai-token-secret");
+  assertNoRawAudioLeak(state);
+
+  await runner.stop();
+});
+
+test("pionero LiveKit agent runner marks LLM error when OpenAI composer fails", async () => {
+  const rooms = [];
+  const composeCalls = [];
+
+  class FakeRoom {
+    constructor() {
+      this.handlers = new Map();
+      rooms.push(this);
+    }
+
+    async connect() {}
+
+    on(eventName, handler) {
+      const handlers = this.handlers.get(eventName) || new Set();
+      handlers.add(handler);
+      this.handlers.set(eventName, handlers);
+      return this;
+    }
+
+    off(eventName, handler) {
+      this.handlers.get(eventName)?.delete(handler);
+      return this;
+    }
+
+    async emit(eventName, ...args) {
+      const results = [];
+      this.handlers.get(eventName)?.forEach((handler) => {
+        results.push(handler(...args));
+      });
+      await Promise.all(results);
+    }
+  }
+
+  const runner = createPioneroLiveKitAgentRunner({
+    RoomClass: FakeRoom,
+    audioIngestEventNames: ["testAudioFrame"],
+    createAgentToken: async () => ({
+      provider: "livekit",
+      url: "wss://livekit.example.test",
+      roomName: "pionero-demo-room",
+      agentIdentity: "aihq-pionero-agent",
+      agentName: "AIHQ Pionero Agent",
+      token: "test-agent-token-secret",
+    }),
+    createSttSession: async () => ({
+      provider: "soniox",
+      async transcribe() {
+        return {
+          ok: true,
+          status: "transcribed",
+          provider: "soniox",
+          stage: "stt",
+          text: "Salam Pionero",
+          transcribedAt: "2026-01-02T03:04:06.000Z",
+          networkIo: true,
+          rawAudio: "raw-audio-secret",
+        };
+      },
+    }),
+    createLlmTurnComposer: async () => ({
+      provider: "openai",
+      configured: true,
+      enabled: true,
+      async composeTurn(input = {}) {
+        composeCalls.push(input);
+        return {
+          ok: false,
+          status: "failed",
+          provider: "openai",
+          networkIo: true,
+          reasonCode: "openai_llm_response_failed",
+          errorMessage: "safe failure",
+        };
+      },
+    }),
+    env: createLiveKitEnv({
+      PIONERO_LIVEKIT_STT_ENABLED: "1",
+      PIONERO_LIVEKIT_STT_FLUSH_MS: "1",
+      PIONERO_LIVEKIT_LLM_ENABLED: "1",
+    }),
+    logger: createTestLogger(),
+    now: () => new Date("2026-01-02T03:04:05.000Z"),
+    roomName: "pionero-demo-room",
+  });
+
+  await runner.start();
+  await rooms[0].emit("testAudioFrame", {
+    byteLength: 4,
+    data: new Uint8Array([1, 2, 3, 4]),
+    rawAudio: "raw-audio-secret",
+  });
+  await new Promise((resolve) => {
+    setTimeout(resolve, 5);
+  });
+
+  const state = runner.getState();
+
+  assert.equal(state.stt.status, "transcript_observed");
+  assert.equal(state.stt.flushesSucceeded, 1);
+  assert.deepEqual(composeCalls, [
+    {
+      transcript: "Salam Pionero",
+      roomName: "pionero-demo-room",
+    },
+  ]);
+  assert.deepEqual(state.llm, {
+    provider: "openai",
+    enabled: true,
+    status: "error",
+    turnsPlanned: 0,
+    lastInputTranscript: "Salam Pionero",
+    lastPlannedResponse: "",
+    lastObservedAt: "",
+    reasonCode: "openai_llm_response_failed",
+    networkIo: true,
+  });
+  assertDefaultTts(state.tts, "planned");
+  assertNoSecretLeak(state, "test-agent-token-secret");
+  assertNoRawAudioLeak(state);
+
+  await runner.stop();
+});
+
 test("pionero LiveKit agent runner treats special-token-only STT success as no transcript", async () => {
   const rooms = [];
   const sttCalls = [];
+  let llmComposerCalls = 0;
 
   class FakeRoom {
     constructor() {
@@ -1901,9 +2180,21 @@ test("pionero LiveKit agent runner treats special-token-only STT success as no t
         };
       },
     }),
+    createLlmTurnComposer: async () => {
+      llmComposerCalls += 1;
+      return {
+        provider: "openai",
+        configured: true,
+        enabled: true,
+        async composeTurn() {
+          throw new Error("composer should not be called");
+        },
+      };
+    },
     env: createLiveKitEnv({
       PIONERO_LIVEKIT_STT_ENABLED: "1",
       PIONERO_LIVEKIT_STT_FLUSH_MS: "1",
+      PIONERO_LIVEKIT_LLM_ENABLED: "1",
     }),
     logger: createTestLogger(),
     now: () => new Date("2026-01-02T03:04:05.000Z"),
@@ -1932,6 +2223,7 @@ test("pionero LiveKit agent runner treats special-token-only STT success as no t
   assert.equal(state.stt.flushesSucceeded, 1);
   assert.equal(state.stt.flushesFailed, 0);
   assert.equal(state.stt.lastFlushReasonCode, "stt_flush_interval");
+  assert.equal(llmComposerCalls, 0);
   assertDefaultLlm(state.llm, "planned");
   assertDefaultTts(state.tts, "planned");
   assertNoSecretLeak(state, "test-agent-token-secret");

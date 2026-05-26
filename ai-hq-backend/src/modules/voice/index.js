@@ -41,6 +41,8 @@ export * from "./speech/providers/sonioxRealtimeWebsocketClient.js";
 export * from "./speech/providers/sonioxNodeWebsocketFactory.js";
 export * from "./speech/providers/sonioxTtsSession.js";
 export * from "./speech/providers/sonioxSttSession.js";
+export * from "./llm/providers/openaiLlmRuntimeConfig.js";
+export * from "./llm/providers/openaiTurnComposer.js";
 
 export * from "./pionero/pioneroLiveKitAgent.js";
 export * from "./pionero/pioneroLiveKitAgentRunner.js";

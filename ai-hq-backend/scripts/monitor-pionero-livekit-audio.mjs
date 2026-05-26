@@ -183,7 +183,12 @@ function buildMonitorResult({
   sttLastFlushReasonCode = "",
   transcriptsObserved = 0,
   lastTranscript = "",
+  llmProvider = "",
   llmStatus = "",
+  llmNetworkIo = false,
+  llmTurnsPlanned = 0,
+  lastInputTranscript = "",
+  lastPlannedResponse = "",
   ttsStatus = "",
   missing = null,
 } = {}) {
@@ -234,7 +239,12 @@ function buildMonitorResult({
     sttLastFlushReasonCode: safeText(sttLastFlushReasonCode),
     transcriptsObserved: n(transcriptsObserved),
     lastTranscript: safeText(lastTranscript),
+    llmProvider: safeText(llmProvider),
     llmStatus: safeText(llmStatus),
+    llmNetworkIo: llmNetworkIo === true,
+    llmTurnsPlanned: n(llmTurnsPlanned),
+    lastInputTranscript: safeText(lastInputTranscript),
+    lastPlannedResponse: safeText(lastPlannedResponse),
     ttsStatus: safeText(ttsStatus),
     ...(missing ? { missing } : {}),
   };
@@ -250,6 +260,7 @@ function buildResultFromState({
 } = {}) {
   const audioIngest = finalState?.audioIngest || startState?.audioIngest || {};
   const stt = finalState?.stt || startState?.stt || {};
+  const llm = finalState?.llm || startState?.llm || {};
 
   return buildMonitorResult({
     ok,
@@ -293,7 +304,12 @@ function buildResultFromState({
     sttLastFlushReasonCode: stt.lastFlushReasonCode,
     transcriptsObserved: stt.transcriptsObserved,
     lastTranscript: stt.lastTranscript,
-    llmStatus: finalState?.llm?.status || startState?.llm?.status,
+    llmProvider: llm.provider,
+    llmStatus: llm.status,
+    llmNetworkIo: llm.networkIo,
+    llmTurnsPlanned: llm.turnsPlanned,
+    lastInputTranscript: llm.lastInputTranscript,
+    lastPlannedResponse: llm.lastPlannedResponse,
     ttsStatus: finalState?.tts?.status || startState?.tts?.status,
   });
 }
