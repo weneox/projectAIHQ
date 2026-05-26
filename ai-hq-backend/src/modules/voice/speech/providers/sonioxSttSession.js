@@ -92,12 +92,27 @@ function addSocketListener(socket, event, handler) {
   }
 }
 
+export function isSonioxSpecialTokenText(text) {
+  const value = s(text).toLowerCase();
+
+  return !value || [
+    "<fin>",
+    "<end>",
+    "<eos>",
+    "<sil>",
+    "<noise>",
+    "<unk>",
+  ].includes(value);
+}
+
 function renderTokens(tokens = []) {
   return asArray(tokens)
+    .filter((token) => !isSonioxSpecialTokenText(token?.text))
     .map((token) =>
       token?.text === undefined || token?.text === null ? "" : String(token.text)
     )
-    .join("");
+    .join("")
+    .trim();
 }
 
 function waitForSttTranscript({
@@ -108,6 +123,10 @@ function waitForSttTranscript({
     const finalTokens = [];
     let nonFinalTokens = [];
     const events = [];
+    let realTokenCount = 0;
+    let specialTokenCount = 0;
+    let finalTokenCount = 0;
+    let nonFinalTokenCount = 0;
     let settled = false;
 
     const timeout = setTimeout(() => {
@@ -119,6 +138,20 @@ function waitForSttTranscript({
       settled = true;
       clearTimeout(timeout);
       fn(value);
+    }
+
+    function buildTranscriptResult() {
+      return {
+        text: renderTokens(finalTokens),
+        interimText: renderTokens(nonFinalTokens),
+        finalTokens,
+        nonFinalTokens,
+        events,
+        realTokenCount,
+        specialTokenCount,
+        finalTokenCount,
+        nonFinalTokenCount,
+      };
     }
 
     addSocketListener(socket, "message", (message) => {
@@ -137,11 +170,32 @@ function waitForSttTranscript({
 
       const tokens = asArray(payload.tokens);
       nonFinalTokens = [];
+      let eventRealTokenCount = 0;
+      let eventSpecialTokenCount = 0;
+      let eventFinalTokenCount = 0;
+      let eventNonFinalTokenCount = 0;
 
       for (const token of tokens) {
-        if (!s(token?.text)) continue;
+        const isFinal = token?.is_final === true;
 
-        if (token?.is_final === true) {
+        if (isFinal) {
+          finalTokenCount += 1;
+          eventFinalTokenCount += 1;
+        } else {
+          nonFinalTokenCount += 1;
+          eventNonFinalTokenCount += 1;
+        }
+
+        if (isSonioxSpecialTokenText(token?.text)) {
+          specialTokenCount += 1;
+          eventSpecialTokenCount += 1;
+          continue;
+        }
+
+        realTokenCount += 1;
+        eventRealTokenCount += 1;
+
+        if (isFinal) {
           finalTokens.push(token);
         } else {
           nonFinalTokens.push(token);
@@ -150,21 +204,17 @@ function waitForSttTranscript({
 
       events.push({
         tokenCount: tokens.length,
-        finalTokenCount: tokens.filter((token) => token?.is_final === true).length,
-        nonFinalTokenCount: tokens.filter((token) => token?.is_final !== true).length,
+        realTokenCount: eventRealTokenCount,
+        specialTokenCount: eventSpecialTokenCount,
+        finalTokenCount: eventFinalTokenCount,
+        nonFinalTokenCount: eventNonFinalTokenCount,
         finalAudioProcMs: Number(payload.final_audio_proc_ms || 0),
         totalAudioProcMs: Number(payload.total_audio_proc_ms || 0),
         finished: payload.finished === true,
       });
 
       if (payload.finished === true) {
-        finish(resolve, {
-          text: renderTokens(finalTokens),
-          interimText: renderTokens(nonFinalTokens),
-          finalTokens,
-          nonFinalTokens,
-          events,
-        });
+        finish(resolve, buildTranscriptResult());
       }
     });
 
@@ -175,13 +225,7 @@ function waitForSttTranscript({
     addSocketListener(socket, "close", () => {
       if (settled) return;
 
-      finish(resolve, {
-        text: renderTokens(finalTokens),
-        interimText: renderTokens(nonFinalTokens),
-        finalTokens,
-        nonFinalTokens,
-        events,
-      });
+      finish(resolve, buildTranscriptResult());
     });
   });
 }
@@ -274,6 +318,10 @@ export function createSonioxSttSession({
           finalTokens: transcriptResult.finalTokens,
           nonFinalTokens: transcriptResult.nonFinalTokens,
           events: transcriptResult.events,
+          realTokenCount: transcriptResult.realTokenCount,
+          specialTokenCount: transcriptResult.specialTokenCount,
+          finalTokenCount: transcriptResult.finalTokenCount,
+          nonFinalTokenCount: transcriptResult.nonFinalTokenCount,
           transcribedAt: now(),
           reasonCode: "",
           connectionPlan: connectResult.connectionPlan,
