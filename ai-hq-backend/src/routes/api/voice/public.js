@@ -1881,7 +1881,13 @@ async function handlePioneroVoiceReadiness(req, res) {
   const logger = getRouteLogger(req, "voice.pionero.readiness");
 
   try {
-    return ok(res, buildPioneroVoiceReadinessSnapshot());
+    const snapshot = buildPioneroVoiceReadinessSnapshot();
+
+    return ok(res, {
+      ...snapshot,
+      ok: true,
+      ready: snapshot.ok === true,
+    });
   } catch (err) {
     logger.error("voice.pionero.readiness.failed", err);
     recordVoiceRouteFailure({

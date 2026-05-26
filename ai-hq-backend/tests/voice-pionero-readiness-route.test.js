@@ -117,7 +117,8 @@ test("pionero voice readiness route reports blocked safely without config", asyn
         const body = await response.json();
 
         assert.equal(response.status, 200);
-        assert.equal(body.ok, false);
+        assert.equal(body.ok, true);
+        assert.equal(body.ready, false);
         assert.equal(body.status, "blocked");
         assert.equal(body.reasonCode, "livekit_config_missing");
         assert.equal(Array.isArray(body.components), true);
@@ -154,7 +155,8 @@ test("pionero voice readiness route reports configured stack without running smo
         const body = await response.json();
 
         assert.equal(response.status, 200);
-        assert.equal(body.ok, false);
+        assert.equal(body.ok, true);
+        assert.equal(body.ready, false);
         assert.equal(body.status, "degraded");
         assert.equal(body.reasonCode, "pionero_speech_loop_smoke_not_run");
         assert.equal(body.components[0].ok, true);
@@ -182,8 +184,9 @@ test("pionero voice readiness route is tenantless and diagnostic-only", async ()
     const body = await response.json();
 
     assert.equal(response.status, 200);
-    assert.equal(body.ok, false);
-    assert.equal(body.status, "blocked");
+    assert.equal(body.ok, true);
+    assert.equal(body.ready, false);
+        assert.equal(body.status, "blocked");
     assert.equal(Array.isArray(body.components), true);
     assertNoCredentialLeak(body);
   });
