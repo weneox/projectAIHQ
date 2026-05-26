@@ -413,6 +413,99 @@ test("pionero live audio monitor connected runner output includes diagnostics", 
   assertNoUnsafeOutputLeak(result);
 });
 
+test("pionero live audio monitor reports successful flushes without fake transcript", async () => {
+  class FakeRoom {}
+  let stopCalled = false;
+
+  const result = await runPioneroLiveKitAudioMonitor({
+    env: unsafeEnv({
+      [LIVEKIT_CREDENTIAL_ID_ENV]: "credential-id-livekit",
+      [LIVEKIT_CREDENTIAL_PROOF_ENV]: "credential-proof-livekit",
+      PIONERO_LIVEKIT_LIVE_MONITOR_ENABLED: "1",
+      PIONERO_LIVEKIT_ROOM_CLIENT_ENABLED: "true",
+      PIONERO_LIVEKIT_LIVE_MONITOR_SECONDS: "1",
+    }),
+    roomClassFactory: async () => FakeRoom,
+    createRunner: ({ roomName }) => ({
+      async start() {
+        return {
+          status: "connected",
+          networkIo: true,
+          roomName,
+          agentIdentity: "aihq-pionero-agent",
+          audioIngest: {
+            status: "waiting_for_audio",
+          },
+          stt: {
+            status: "waiting_for_audio",
+            framesBuffered: 0,
+            sttFramesDropped: 0,
+            sttFrameNormalizeFailed: 0,
+            sttPcmBytesBuffered: 0,
+            flushesAttempted: 0,
+            flushesSucceeded: 0,
+            flushesFailed: 0,
+            lastFlushReasonCode: "",
+            transcriptsObserved: 0,
+            lastTranscript: "",
+          },
+          llm: { status: "planned" },
+          tts: { status: "planned" },
+        };
+      },
+      snapshotDiagnostics() {
+        return {
+          status: "connected",
+          networkIo: true,
+          roomName,
+          agentIdentity: "aihq-pionero-agent",
+          reasonCode: "",
+          audioIngest: {
+            status: "audio_observed",
+            tracksObserved: 1,
+            framesObserved: 8,
+            bytesObserved: 512,
+          },
+          stt: {
+            status: "streaming",
+            framesBuffered: 0,
+            sttFramesDropped: 0,
+            sttFrameNormalizeFailed: 0,
+            sttPcmBytesBuffered: 0,
+            flushesAttempted: 4,
+            flushesSucceeded: 4,
+            flushesFailed: 0,
+            lastFlushReasonCode: "stt_flush_interval",
+            transcriptsObserved: 0,
+            lastTranscript: "",
+            rawAudio: "rawAudio-secret",
+            token: "token-secret",
+          },
+          llm: { status: "planned" },
+          tts: { status: "planned" },
+        };
+      },
+      async stop() {
+        stopCalled = true;
+        return { status: "stopped" };
+      },
+    }),
+    wait: async () => {},
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.sttStatus, "streaming");
+  assert.equal(result.sttFlushesAttempted, 4);
+  assert.equal(result.sttFlushesSucceeded, 4);
+  assert.equal(result.sttFlushesFailed, 0);
+  assert.equal(result.transcriptsObserved, 0);
+  assert.equal(result.lastTranscript, "");
+  assert.equal(result.llmStatus, "planned");
+  assert.equal(result.ttsStatus, "planned");
+  assert.equal(stopCalled, true);
+  assertNoUnsafeOutputLeak(result);
+});
+
 test("pionero live audio monitor clamps monitor duration", async () => {
   const maxResult = await runPioneroLiveKitAudioMonitor({
     env: unsafeEnv({

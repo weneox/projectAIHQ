@@ -10,10 +10,16 @@ import {
 } from "../src/modules/voice/speech/providers/sonioxSpeechRuntimeConfig.js";
 
 class FakeSocket extends EventEmitter {
-  constructor() {
+  constructor({
+    tokens = [
+      { text: "Salam", is_final: true },
+      { text: " dünya", is_final: true },
+    ],
+  } = {}) {
     super();
     this.sent = [];
     this.closed = false;
+    this.tokens = tokens;
   }
 
   send(payload) {
@@ -24,10 +30,7 @@ class FakeSocket extends EventEmitter {
         this.emit(
           "message",
           JSON.stringify({
-            tokens: [
-              { text: "Salam", is_final: true },
-              { text: " dünya", is_final: true },
-            ],
+            tokens: this.tokens,
             finished: true,
             final_audio_proc_ms: 100,
             total_audio_proc_ms: 120,
@@ -116,6 +119,10 @@ test("Soniox STT session sends audio chunks and returns final transcript", async
   assert.equal(result.interimText, "");
   assert.equal(result.finalTokens.length, 2);
   assert.equal(result.nonFinalTokens.length, 0);
+  assert.equal(result.realTokenCount, 2);
+  assert.equal(result.specialTokenCount, 0);
+  assert.equal(result.finalTokenCount, 2);
+  assert.equal(result.nonFinalTokenCount, 0);
   assert.equal(result.events.length, 1);
   assert.equal(result.transcribedAt, "2026-01-01T00:00:00.000Z");
   assert.equal(socket.closed, true);
@@ -124,6 +131,73 @@ test("Soniox STT session sends audio chunks and returns final transcript", async
   assert.deepEqual(JSON.parse(socket.sent[1]), { type: "finalize" });
   assert.equal(socket.sent[2], "");
 
+  assert.equal(JSON.stringify(result).includes("test-secret"), false);
+});
+
+test("Soniox STT session filters special final marker tokens", async () => {
+  const socket = new FakeSocket({
+    tokens: [{ text: "<fin>", is_final: true }],
+  });
+
+  const session = createSonioxSttSession({
+    now: () => "2026-01-01T00:00:00.000Z",
+    runtimeConfig: buildSonioxSpeechRuntimeConfig({
+      env: {
+        SONIOX_API_KEY: "test-secret",
+        VOICE_LANGUAGE: "az",
+      },
+    }),
+    socketFactory: async () => ({ socket }),
+  });
+
+  const result = await session.transcribe({
+    audioChunks: [Buffer.from("fake-audio")],
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.text, "");
+  assert.equal(result.interimText, "");
+  assert.equal(result.finalTokens.length, 0);
+  assert.equal(result.nonFinalTokens.length, 0);
+  assert.equal(result.realTokenCount, 0);
+  assert.equal(result.specialTokenCount, 1);
+  assert.equal(result.finalTokenCount, 1);
+  assert.equal(result.nonFinalTokenCount, 0);
+  assert.equal(result.events[0].realTokenCount, 0);
+  assert.equal(result.events[0].specialTokenCount, 1);
+  assert.equal(JSON.stringify(result).includes("test-secret"), false);
+});
+
+test("Soniox STT session keeps real text when mixed with special tokens", async () => {
+  const socket = new FakeSocket({
+    tokens: [
+      { text: "salam ", is_final: true },
+      { text: "<fin>", is_final: true },
+    ],
+  });
+
+  const session = createSonioxSttSession({
+    now: () => "2026-01-01T00:00:00.000Z",
+    runtimeConfig: buildSonioxSpeechRuntimeConfig({
+      env: {
+        SONIOX_API_KEY: "test-secret",
+        VOICE_LANGUAGE: "az",
+      },
+    }),
+    socketFactory: async () => ({ socket }),
+  });
+
+  const result = await session.transcribe({
+    audioChunks: [Buffer.from("fake-audio")],
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.text, "salam");
+  assert.equal(result.finalTokens.length, 1);
+  assert.equal(result.realTokenCount, 1);
+  assert.equal(result.specialTokenCount, 1);
+  assert.equal(result.finalTokenCount, 2);
+  assert.equal(result.nonFinalTokenCount, 0);
   assert.equal(JSON.stringify(result).includes("test-secret"), false);
 });
 

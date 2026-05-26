@@ -1833,6 +1833,114 @@ test("pionero LiveKit agent runner flushes buffered audio into fake STT session"
   assertNoRawAudioLeak(state);
 });
 
+test("pionero LiveKit agent runner treats special-token-only STT success as no transcript", async () => {
+  const rooms = [];
+  const sttCalls = [];
+
+  class FakeRoom {
+    constructor() {
+      this.handlers = new Map();
+      rooms.push(this);
+    }
+
+    async connect() {}
+
+    on(eventName, handler) {
+      const handlers = this.handlers.get(eventName) || new Set();
+      handlers.add(handler);
+      this.handlers.set(eventName, handlers);
+      return this;
+    }
+
+    off(eventName, handler) {
+      this.handlers.get(eventName)?.delete(handler);
+      return this;
+    }
+
+    async emit(eventName, ...args) {
+      const results = [];
+      this.handlers.get(eventName)?.forEach((handler) => {
+        results.push(handler(...args));
+      });
+      await Promise.all(results);
+    }
+  }
+
+  const runner = createPioneroLiveKitAgentRunner({
+    RoomClass: FakeRoom,
+    audioIngestEventNames: ["testAudioFrame"],
+    createAgentToken: async () => ({
+      provider: "livekit",
+      url: "wss://livekit.example.test",
+      roomName: "pionero-demo-room",
+      agentIdentity: "aihq-pionero-agent",
+      agentName: "AIHQ Pionero Agent",
+      token: "test-agent-token-secret",
+    }),
+    createSttSession: async () => ({
+      provider: "soniox",
+      async transcribe(input = {}) {
+        sttCalls.push({
+          chunkCount: input.audioChunks?.length || 0,
+          finalize: input.finalize,
+        });
+        return {
+          ok: true,
+          status: "transcribed",
+          provider: "soniox",
+          stage: "stt",
+          text: "",
+          realTokenCount: 0,
+          specialTokenCount: 1,
+          finalTokenCount: 1,
+          nonFinalTokenCount: 0,
+          transcribedAt: "2026-01-02T03:04:06.000Z",
+          networkIo: true,
+          rawAudio: "raw-audio-secret",
+          token: "test-stt-token-secret",
+        };
+      },
+    }),
+    env: createLiveKitEnv({
+      PIONERO_LIVEKIT_STT_ENABLED: "1",
+      PIONERO_LIVEKIT_STT_FLUSH_MS: "1",
+    }),
+    logger: createTestLogger(),
+    now: () => new Date("2026-01-02T03:04:05.000Z"),
+    roomName: "pionero-demo-room",
+  });
+
+  await runner.start();
+  await rooms[0].emit("testAudioFrame", {
+    byteLength: 7,
+    data: new Uint8Array([1, 2, 3, 4, 5, 6, 7]),
+    rawAudio: "raw-audio-secret",
+  });
+  await new Promise((resolve) => {
+    setTimeout(resolve, 5);
+  });
+
+  const state = runner.getState();
+
+  assert.equal(sttCalls.length, 1);
+  assert.equal(sttCalls[0].chunkCount, 1);
+  assert.equal(sttCalls[0].finalize, true);
+  assert.equal(state.stt.status, "streaming");
+  assert.equal(state.stt.transcriptsObserved, 0);
+  assert.equal(state.stt.lastTranscript, "");
+  assert.equal(state.stt.flushesAttempted, 1);
+  assert.equal(state.stt.flushesSucceeded, 1);
+  assert.equal(state.stt.flushesFailed, 0);
+  assert.equal(state.stt.lastFlushReasonCode, "stt_flush_interval");
+  assertDefaultLlm(state.llm, "planned");
+  assertDefaultTts(state.tts, "planned");
+  assertNoSecretLeak(state, "test-agent-token-secret");
+  assertNoSecretLeak(state, "test-stt-token-secret");
+  assertNoRawAudioLeak(state);
+
+  await runner.stop();
+});
+
 test("pionero LiveKit agent runner bounds STT frame buffer", async () => {
   const rooms = [];
   const sttCalls = [];
