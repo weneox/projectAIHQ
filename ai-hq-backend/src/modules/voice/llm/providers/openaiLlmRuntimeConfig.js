@@ -14,9 +14,10 @@ function readPositiveInteger(value, fallback, { min = 1, max = 4_000 } = {}) {
   return Math.max(min, Math.min(max, next));
 }
 
-function readFiniteNumber(value, fallback) {
+function readOptionalFiniteNumber(value) {
+  if (value === undefined || value === null || value === "") return null;
   const parsed = Number(s(value));
-  return Number.isFinite(parsed) ? parsed : fallback;
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 export const OPENAI_LLM_RUNTIME_CONFIG_VERSION =
@@ -36,9 +37,8 @@ export function readOpenAiLlmRuntimeConfig({
     120,
     { min: 1, max: 2_000 }
   );
-  const temperature = readFiniteNumber(
-    overrides.temperature ?? env.PIONERO_OPENAI_TEMPERATURE,
-    0.4
+  const temperature = readOptionalFiniteNumber(
+    overrides.temperature ?? env.PIONERO_OPENAI_TEMPERATURE
   );
 
   return {
