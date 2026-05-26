@@ -1,4 +1,4 @@
-export { buildVoiceConfigFromProjectedRuntime } from "./config.js";
+﻿export { buildVoiceConfigFromProjectedRuntime } from "./config.js";
 export { findTenantByKeyOrPhone } from "./repository.js";
 export { buildConferenceName, upsertCallAndSession } from "./mutations.js";
 export {
@@ -48,3 +48,4 @@ export * from "./pionero/pioneroLiveKitAgent.js";
 export * from "./pionero/pioneroLiveKitAgentRunner.js";
 export * from "./pionero/pioneroLiveKitAgentRuntime.js";
 export * from "./pionero/pioneroLiveKitRoomClassFactory.js";
+export * from "./pionero/pioneroVoiceReadinessSnapshot.js";
