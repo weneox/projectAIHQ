@@ -122,7 +122,36 @@ test("Soniox STT session sends audio chunks and returns final transcript", async
 
   assert.equal(Buffer.isBuffer(socket.sent[0]), true);
   assert.deepEqual(JSON.parse(socket.sent[1]), { type: "finalize" });
+  assert.equal(socket.sent[2], "");
 
+  assert.equal(JSON.stringify(result).includes("test-secret"), false);
+});
+
+test("Soniox STT session sends typed array bytes and empty end-of-audio", async () => {
+  const socket = new FakeSocket();
+  const source = new Uint8Array([9, 1, 2, 3, 8]);
+
+  const session = createSonioxSttSession({
+    now: () => "2026-01-01T00:00:00.000Z",
+    runtimeConfig: buildSonioxSpeechRuntimeConfig({
+      env: {
+        SONIOX_API_KEY: "test-secret",
+        VOICE_LANGUAGE: "az",
+      },
+    }),
+    socketFactory: async () => ({ socket }),
+  });
+
+  const result = await session.transcribe({
+    audioChunks: [source.subarray(1, 4)],
+    finalize: true,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(Buffer.isBuffer(socket.sent[0]), true);
+  assert.deepEqual([...socket.sent[0]], [1, 2, 3]);
+  assert.deepEqual(JSON.parse(socket.sent[1]), { type: "finalize" });
+  assert.equal(socket.sent[2], "");
   assert.equal(JSON.stringify(result).includes("test-secret"), false);
 });
 
