@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+﻿import { useCallback, useEffect, useState } from "react";
 import { Mic, PhoneOff, Radio, RefreshCw, SatelliteDish, Square, Volume2 } from "lucide-react";
 
 import useBrowserVoiceCall from "./hooks/useBrowserVoiceCall.js";
 import usePioneroLiveKitRoom from "./hooks/usePioneroLiveKitRoom.js";
-import { getVoiceSpeechGatewayReadiness } from "../api/voice.js";
+import { getPioneroVoiceReadiness, getVoiceSpeechGatewayReadiness } from "../api/voice.js";
 import Button from "../components/ui/Button.jsx";
 import {
   InlineNotice,
@@ -56,6 +56,25 @@ function readPioneroLiveKitStatusLabel(status = "") {
   if (normalizedStatus === "error") return "Unavailable";
 
   return "Idle";
+}
+
+function readReadinessComponent(snapshot = {}, name = "") {
+  const components = Array.isArray(snapshot?.components) ? snapshot.components : [];
+  return components.find((component) => component?.name === name) || {};
+}
+
+function readinessTone(status = "") {
+  const normalized = s(status).toLowerCase();
+  if (normalized === "ready") return "success";
+  if (normalized === "degraded") return "warning";
+  if (normalized === "blocked" || normalized === "failed") return "danger";
+  return "info";
+}
+
+function readinessLabel(component = {}) {
+  const status = s(component.status, component.ok ? "ready" : "blocked");
+  const reasonCode = s(component.reasonCode);
+  return reasonCode ? `${status} · ${reasonCode}` : status;
 }
 
 export default function BrowserVoiceCall() {
@@ -122,6 +141,9 @@ export default function BrowserVoiceCall() {
   const [speechReadiness, setSpeechReadiness] = useState(null);
   const [speechReadinessStatus, setSpeechReadinessStatus] = useState("idle");
   const [speechReadinessError, setSpeechReadinessError] = useState("");
+  const [pioneroVoiceReadiness, setPioneroVoiceReadiness] = useState(null);
+  const [pioneroVoiceReadinessStatus, setPioneroVoiceReadinessStatus] = useState("idle");
+  const [pioneroVoiceReadinessError, setPioneroVoiceReadinessError] = useState("");
   const [pioneroAgentRefreshStatus, setPioneroAgentRefreshStatus] = useState("idle");
 
   const isLive = status === "live";
@@ -161,6 +183,22 @@ export default function BrowserVoiceCall() {
       speechReadiness?.runtimeReasonCode,
     "readiness_not_checked"
   );
+  const pioneroVoiceReadinessSnapshot = pioneroVoiceReadiness || {};
+  const pioneroVoiceReadinessLabel = pioneroVoiceReadinessStatus === "loading"
+    ? "checking"
+    : s(pioneroVoiceReadinessSnapshot.status, "not_checked");
+  const pioneroVoiceReadinessReason = s(
+    pioneroVoiceReadinessError || pioneroVoiceReadinessSnapshot.reasonCode,
+    "readiness_not_checked"
+  );
+  const pioneroVoiceReadinessComponents = [
+    ["LiveKit", readReadinessComponent(pioneroVoiceReadinessSnapshot, "livekit")],
+    ["Soniox STT", readReadinessComponent(pioneroVoiceReadinessSnapshot, "sonioxStt")],
+    ["Soniox TTS", readReadinessComponent(pioneroVoiceReadinessSnapshot, "sonioxTts")],
+    ["OpenAI composer", readReadinessComponent(pioneroVoiceReadinessSnapshot, "openaiComposer")],
+    ["Speech-loop smoke", readReadinessComponent(pioneroVoiceReadinessSnapshot, "speechLoopSmoke")],
+  ];
+
   const pioneroLiveKitLive = pioneroLiveKitStatus === "live";
   const pioneroLiveKitLoading = [
     "creating",
@@ -274,6 +312,31 @@ export default function BrowserVoiceCall() {
     };
   }, [refreshSpeechReadiness]);
 
+  const refreshPioneroVoiceReadiness = useCallback(async () => {
+    setPioneroVoiceReadinessStatus("loading");
+    setPioneroVoiceReadinessError("");
+
+    try {
+      const result = await getPioneroVoiceReadiness();
+      setPioneroVoiceReadiness(result);
+      setPioneroVoiceReadinessStatus("ready");
+    } catch (err) {
+      setPioneroVoiceReadiness(null);
+      setPioneroVoiceReadinessStatus("error");
+      setPioneroVoiceReadinessError(s(err?.message || err, "pionero_readiness_failed"));
+    }
+  }, []);
+
+  useEffect(() => {
+    const readinessTimer = window.setTimeout(() => {
+      void refreshPioneroVoiceReadiness();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(readinessTimer);
+    };
+  }, [refreshPioneroVoiceReadiness]);
+
   const handleRefreshPioneroAgentStatus = useCallback(async () => {
     setPioneroAgentRefreshStatus("loading");
 
@@ -294,7 +357,7 @@ export default function BrowserVoiceCall() {
       <PageHeader
         eyebrow="Voice Assistant"
         title="Browser Voice Call"
-        description="Eyni səhifədə həm GPT Realtime WebRTC zəngi, həm də Soniox speech bridge test edilir."
+        description="Eyni sÉ™hifÉ™dÉ™ hÉ™m GPT Realtime WebRTC zÉ™ngi, hÉ™m dÉ™ Soniox speech bridge test edilir."
         actions={
           isLive ? (
             <Button
@@ -319,17 +382,55 @@ export default function BrowserVoiceCall() {
       <InlineNotice
         tone="info"
         title="Three voice lanes"
-        description="GPT Realtime WebRTC canlı danışıq üçün qalır. Pionero LiveKit yeni realtime agent lane-ni yoxlayır. Speech Bridge paneli isə browser mic → STT və text → TTS axınını ayrıca yoxlamaq üçündür."
+        description="GPT Realtime WebRTC canlÄ± danÄ±ÅŸÄ±q Ã¼Ã§Ã¼n qalÄ±r. Pionero LiveKit yeni realtime agent lane-ni yoxlayÄ±r. Speech Bridge paneli isÉ™ browser mic â†’ STT vÉ™ text â†’ TTS axÄ±nÄ±nÄ± ayrÄ±ca yoxlamaq Ã¼Ã§Ã¼ndÃ¼r."
       />
 
+      <section className="rounded-[28px] border border-line-soft bg-white p-5 shadow-[0_18px_60px_rgba(15,23,42,0.06)]">
+        <div className="mb-5 flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-text">Pionero readiness snapshot</h2>
+            <p className="text-sm text-text-muted">
+              LiveKit, Soniox STT/TTS, OpenAI composer və speech-loop smoke statusu.
+            </p>
+          </div>
+
+          <Button
+            variant="secondary"
+            leftIcon={<RefreshCw className="h-4 w-4" />}
+            loading={pioneroVoiceReadinessStatus === "loading"}
+            onClick={refreshPioneroVoiceReadiness}
+          >
+            Refresh Pionero readiness
+          </Button>
+        </div>
+
+        <InlineNotice
+          tone={readinessTone(pioneroVoiceReadinessLabel)}
+          title={"Pionero readiness: " + pioneroVoiceReadinessLabel}
+          description={pioneroVoiceReadinessReason}
+        />
+
+        <div className="mt-4 grid gap-3 md:grid-cols-5">
+          {pioneroVoiceReadinessComponents.map(([label, component]) => (
+            <div key={label} className="rounded-2xl border border-line-soft bg-surface-subtle p-3">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+                {label}
+              </div>
+              <div className="mt-1 text-sm font-semibold text-text">
+                {readinessLabel(component)}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
       {runtimeMeta ? (
         <InlineNotice
           tone={runtimeMeta.runtimeApplied ? "success" : "warning"}
           title={runtimeLabel}
           description={
             runtimeMeta.runtimeApplied
-              ? `Runtime tətbiq olundu${runtimeMeta.tenantKey ? `: ${runtimeMeta.tenantKey}` : ""}.`
-              : `Runtime tətbiq olunmadı: ${s(runtimeMeta.reasonCode, "fallback")}.`
+              ? `Runtime tÉ™tbiq olundu${runtimeMeta.tenantKey ? `: ${runtimeMeta.tenantKey}` : ""}.`
+              : `Runtime tÉ™tbiq olunmadÄ±: ${s(runtimeMeta.reasonCode, "fallback")}.`
           }
         />
       ) : null}
@@ -351,7 +452,7 @@ export default function BrowserVoiceCall() {
             <div>
               <h2 className="text-lg font-semibold text-text">GPT Realtime WebRTC</h2>
               <p className="text-sm text-text-muted">
-                Canlı browser zəngi: danış, assistant cavab versin, tool event-ləri və latency-ni yoxla.
+                CanlÄ± browser zÉ™ngi: danÄ±ÅŸ, assistant cavab versin, tool event-lÉ™ri vÉ™ latency-ni yoxla.
               </p>
             </div>
           </div>
@@ -402,7 +503,7 @@ export default function BrowserVoiceCall() {
             <div>
               <h2 className="text-lg font-semibold text-text">Pionero LiveKit realtime lane</h2>
               <p className="text-sm text-text-muted">
-                GPT Realtime-dan ayrı yeni canlı assistant xətti: LiveKit transport, Soniox STT, fast LLM və Cartesia TTS.
+                GPT Realtime-dan ayrÄ± yeni canlÄ± assistant xÉ™tti: LiveKit transport, Soniox STT, fast LLM vÉ™ Cartesia TTS.
               </p>
             </div>
           </div>
@@ -801,7 +902,7 @@ export default function BrowserVoiceCall() {
             <div>
               <h2 className="text-lg font-semibold text-text">Speech Bridge / Soniox lane</h2>
               <p className="text-sm text-text-muted">
-                Browser mic səsini backend speech bridge-ə göndər, transcript al, sonra mətni TTS ilə səsləndir.
+                Browser mic sÉ™sini backend speech bridge-É™ gÃ¶ndÉ™r, transcript al, sonra mÉ™tni TTS ilÉ™ sÉ™slÉ™ndir.
               </p>
             </div>
           </div>
@@ -826,7 +927,7 @@ export default function BrowserVoiceCall() {
               STT
             </div>
             <div className="mt-1 text-sm font-semibold text-text">
-              Browser mic → transcribe
+              Browser mic â†’ transcribe
             </div>
           </div>
 
@@ -835,7 +936,7 @@ export default function BrowserVoiceCall() {
               TTS
             </div>
             <div className="mt-1 text-sm font-semibold text-text">
-              Text → synthesize
+              Text â†’ synthesize
             </div>
           </div>
         </div>
@@ -932,7 +1033,7 @@ export default function BrowserVoiceCall() {
           className="mt-2 min-h-28 w-full rounded-2xl border border-line-soft bg-surface-subtle p-3 text-sm text-text outline-none focus:border-brand"
           id="speech-bridge-text"
           onChange={(event) => setSpeechBridgeDraftText(event.target.value)}
-          placeholder="Transcript burada görünəcək və ya TTS üçün mətni buraya yaz..."
+          placeholder="Transcript burada gÃ¶rÃ¼nÉ™cÉ™k vÉ™ ya TTS Ã¼Ã§Ã¼n mÉ™tni buraya yaz..."
           value={speechBridgeText}
         />
 
@@ -969,7 +1070,7 @@ export default function BrowserVoiceCall() {
         <div className="mb-4">
           <h2 className="text-base font-semibold text-text">Live call log</h2>
           <p className="text-sm text-text-muted">
-            Zəng və speech bridge zamanı gələn əsas transcript və connection event-ləri.
+            ZÉ™ng vÉ™ speech bridge zamanÄ± gÉ™lÉ™n É™sas transcript vÉ™ connection event-lÉ™ri.
           </p>
         </div>
 
@@ -992,7 +1093,7 @@ export default function BrowserVoiceCall() {
             ))
           ) : (
             <div className="rounded-2xl border border-dashed border-line-soft p-4 text-sm text-text-muted">
-              Start call və ya speech bridge testindən sonra log burada görünəcək.
+              Start call vÉ™ ya speech bridge testindÉ™n sonra log burada gÃ¶rÃ¼nÉ™cÉ™k.
             </div>
           )}
         </div>
