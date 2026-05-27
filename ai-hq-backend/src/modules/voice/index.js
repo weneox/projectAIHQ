@@ -50,3 +50,4 @@ export * from "./pionero/pioneroLiveKitAgentRuntime.js";
 export * from "./pionero/pioneroLiveKitRoomClassFactory.js";
 export * from "./pionero/pioneroRealtimeAgentRegistry.js";
 export * from "./pionero/pioneroVoiceReadinessSnapshot.js";
+export * from "./pionero/pioneroRealtimeReadinessGuard.js";
