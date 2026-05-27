@@ -1,4 +1,4 @@
-import {
+﻿import {
   buildPioneroLiveKitAgentPlan,
   createPioneroLiveKitAgentToken,
 } from "./pioneroLiveKitAgent.js";
@@ -2290,6 +2290,45 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
         return undefined;
       });
     });
+  }
+
+  function observeExistingRoomAudioPublications(targetRoom) {
+    currentState = snapshotPioneroRoomParticipants(
+      currentState,
+      targetRoom,
+      diagnosticOptions
+    );
+
+    collectionValues(targetRoom?.remoteParticipants).forEach((participant) => {
+      participantPublications(participant).forEach((publication) => {
+        const publicationDiagnostics = readPublicationDiagnosticCandidate(
+          publication,
+          diagnosticOptions
+        );
+
+        if (!isAudioPublicationDiagnostic(publicationDiagnostics)) return;
+
+        currentState = recordPioneroAudioIngestEvent(currentState, {
+          eventName: "existing_audio_publication_scanned",
+          publication,
+          participant,
+        }, diagnosticOptions);
+
+        const track =
+          publication?.track ||
+          publication?.audioTrack ||
+          publication?.trackPublication?.track ||
+          publication?.trackRef ||
+          null;
+
+        if (!track) return;
+
+        attachTrackAudioListeners(track);
+        startAudioStreamForTrack(track);
+      });
+    });
+
+    return currentState;
   }
 
   function detachAudioIngestListeners() {
