@@ -2014,6 +2014,24 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
         });
 
         await recordTranscriptTurnPlans(transcriptResult);
+
+        const transcriptText = readTranscriptText(transcriptResult);
+        const currentLlm = buildPioneroLlmState(currentState.llm);
+
+        if (
+          transcriptText &&
+          currentLlm.status !== "error" &&
+          currentLlm.turnsPlanned < 1
+        ) {
+          currentState = recordPioneroLlmTurnPlan(currentState, {
+            transcript: transcriptText,
+            plannedResponse: obj(transcriptResult).plannedResponse,
+          }, { now });
+
+          currentState = recordPioneroTtsPlan(currentState, {
+            text: currentState.llm?.lastPlannedResponse,
+          }, { now });
+        }
       } catch (err) {
         logger?.warn?.("pionero.livekit.agent_runner.stt_flush_failed", {
           reasonCode: "stt_flush_failed",
