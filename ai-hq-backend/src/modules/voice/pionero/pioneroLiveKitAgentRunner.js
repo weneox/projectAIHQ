@@ -59,6 +59,7 @@ const DEFAULT_TRACK_AUDIO_EVENT_NAMES = [
 ];
 const DEFAULT_STT_MAX_FRAMES = 120;
 const DEFAULT_STT_FLUSH_MS = 2500;
+const DEFAULT_STT_FLUSH_FRAMES = 3;
 const SAFE_DIAGNOSTIC_TEXT_MAX_LENGTH = 96;
 const UNSAFE_DIAGNOSTIC_TEXT_PATTERNS = [
   "token",
@@ -1350,6 +1351,11 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
     DEFAULT_STT_FLUSH_MS,
     { min: 1, max: 60_000 }
   );
+  const sttFlushFrames = readBoundedInteger(
+    env.PIONERO_LIVEKIT_STT_FLUSH_FRAMES,
+    DEFAULT_STT_FLUSH_FRAMES,
+    { min: 1, max: 120 }
+  );
 
   let room = null;
   let connected = false;
@@ -2081,7 +2087,14 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
     }
 
     updateBufferedSttState();
-    scheduleSttFlush();
+
+    if (sttFrameBuffer.length >= sttFlushFrames) {
+      setTimeout(() => {
+        void flushSttFrameBuffer("stt_flush_frame_threshold");
+      }, 0)?.unref?.();
+    } else {
+      scheduleSttFlush();
+    }
 
     return currentState;
   }
