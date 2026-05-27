@@ -98,59 +98,34 @@ export const PIONERO_VOICE_LANGUAGE_GUARD_INSTRUCTIONS = [
 
 function hasCanonicalRuntimeContext(runtimeConfig = {}) {
   const config = obj(runtimeConfig);
+  const business = obj(config.business);
+  const businessProfile = obj(config.businessProfile);
+  const company = obj(config.company);
+  const projectedRuntime = obj(config.projectedRuntime);
+  const voiceProfile = obj(config.voiceProfile);
+  const voiceBehavior = obj(config.voiceBehavior);
+  const realtime = obj(config.realtime);
 
   return Boolean(
     Object.keys(config).length > 0 &&
       (
-        config.companyName ||
-        config.tenantKey ||
-        config.tenantId ||
-        config.defaultLanguage ||
-        config.voiceProfile ||
-        config.voiceBehavior ||
-        config.realtime ||
-        config.projectedRuntime
+        s(config.companyName) ||
+        s(config.businessSummary) ||
+        Object.keys(business).length > 0 ||
+        Object.keys(businessProfile).length > 0 ||
+        Object.keys(company).length > 0 ||
+        Object.keys(voiceProfile).length > 0 ||
+        Object.keys(voiceBehavior).length > 0 ||
+        truncateVoiceBrainText(realtime.instructions, 1) ||
+        Object.keys(projectedRuntime).length > 0
       )
   );
-}
-
-function safePioneroContextValue(value = "") {
-  return truncateVoiceBrainText(s(value), 160);
-}
-
-function buildPioneroRequestContextLines({
-  tenantContext = {},
-  workspaceContext = {},
-} = {}) {
-  const tenant = obj(tenantContext);
-  const workspace = obj(workspaceContext);
-  const tenantId = safePioneroContextValue(tenant.tenantId || tenant.id);
-  const tenantKey = safePioneroContextValue(
-    tenant.tenantKey || tenant.tenant_key || tenant.key
-  );
-  const workspaceId = safePioneroContextValue(
-    workspace.workspaceId || workspace.id
-  );
-  const workspaceKey = safePioneroContextValue(
-    workspace.workspaceKey || workspace.workspace_key || workspace.key
-  );
-  const lines = [
-    "Pionero request context:",
-    tenantId ? `- Tenant id: ${tenantId}.` : "",
-    tenantKey ? `- Tenant key: ${tenantKey}.` : "",
-    workspaceId ? `- Workspace id: ${workspaceId}.` : "",
-    workspaceKey ? `- Workspace key: ${workspaceKey}.` : "",
-  ].filter(Boolean);
-
-  return lines.length > 1 ? lines : [];
 }
 
 export function buildPioneroVoiceBrainInstructions({
   baseInstructions = "",
   runtimeConfig = {},
   runtimeApplied = false,
-  tenantContext = {},
-  workspaceContext = {},
 } = {}) {
   const canonicalRuntimeAvailable = hasCanonicalRuntimeContext(runtimeConfig);
   const brainMode =
@@ -159,10 +134,6 @@ export function buildPioneroVoiceBrainInstructions({
     baseInstructions,
     runtimeConfig,
     runtimeApplied: runtimeApplied === true,
-  });
-  const requestContextLines = buildPioneroRequestContextLines({
-    tenantContext,
-    workspaceContext,
   });
   const fallbackLines = brainMode === "fallback"
     ? [
@@ -179,8 +150,6 @@ export function buildPioneroVoiceBrainInstructions({
     languageGuardVersion: PIONERO_VOICE_LANGUAGE_GUARD_VERSION,
     instructions: [
       canonicalInstructions,
-      "",
-      ...requestContextLines,
       "",
       PIONERO_VOICE_LANGUAGE_GUARD_INSTRUCTIONS,
       ...fallbackLines,

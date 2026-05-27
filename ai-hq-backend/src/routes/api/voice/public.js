@@ -2133,9 +2133,7 @@ async function handlePioneroLiveKitAgentStartPlan(
       ...(TrackKind ? { TrackKind } : {}),
       ...(TrackSource ? { TrackSource } : {}),
       runtimeApplied: brainInput.runtimeApplied === true,
-      tenantContext: brainInput.tenantContext,
       voiceRuntimeConfig: brainInput.voiceRuntimeConfig,
-      workspaceContext: brainInput.workspaceContext,
     });
 
     return ok(res, toPioneroJsonSafe(state));

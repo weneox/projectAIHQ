@@ -1408,10 +1408,8 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
     trackAudioEventNames = [],
     runtimeApplied = false,
     runtimeConfig = null,
-    tenantContext = null,
     voiceRuntimeApplied = false,
     voiceRuntimeConfig = null,
-    workspaceContext = null,
   } = input;
   const AudioStreamCtor = AudioStreamClass || AudioStream;
   const diagnosticOptions = {
@@ -1440,8 +1438,6 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
   const pioneroBrain = buildPioneroVoiceBrainInstructions({
     runtimeConfig: brainRuntimeConfig,
     runtimeApplied: voiceRuntimeApplied === true || runtimeApplied === true,
-    tenantContext: obj(tenantContext),
-    workspaceContext: obj(workspaceContext),
   });
 
   let room = null;
@@ -1652,10 +1648,7 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
             brainMode: pioneroBrain.brainMode,
             brainPolicyVersion: pioneroBrain.brainPolicyVersion,
             languageGuardVersion: pioneroBrain.languageGuardVersion,
-            voiceRuntimeConfig: brainRuntimeConfig,
             runtimeApplied: voiceRuntimeApplied === true || runtimeApplied === true,
-            tenantContext: obj(tenantContext),
-            workspaceContext: obj(workspaceContext),
           })
         : createOpenAiTurnComposer({
             env,

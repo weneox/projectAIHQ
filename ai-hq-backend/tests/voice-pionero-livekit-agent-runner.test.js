@@ -21,6 +21,9 @@ import {
 import {
   voiceRoutes,
 } from "../src/routes/api/voice/public.js";
+import {
+  buildPioneroVoiceBrainInstructions,
+} from "../src/modules/voice/brain/index.js";
 
 function createTestLogger() {
   return {
@@ -2023,6 +2026,28 @@ test("pionero LiveKit agent runner composes OpenAI turn when gated LLM is enable
   await runner.stop();
 });
 
+test("pionero brain instructions do not treat internal ids as canonical context", () => {
+  const brain = buildPioneroVoiceBrainInstructions({
+    runtimeApplied: false,
+    runtimeConfig: {
+      tenantId: "tenant-brain",
+      tenantKey: "tenant-brain",
+      defaultLanguage: "az",
+    },
+  });
+
+  assert.equal(brain.brainMode, "fallback");
+  assert.match(
+    brain.instructions,
+    /Always reply in Azerbaijani unless the caller explicitly requests another language/
+  );
+  assert.equal(brain.instructions.includes("tenant-brain"), false);
+  assert.equal(brain.instructions.includes("Tenant id"), false);
+  assert.equal(brain.instructions.includes("Tenant key"), false);
+  assert.equal(brain.instructions.includes("Workspace id"), false);
+  assert.equal(brain.instructions.includes("Workspace key"), false);
+});
+
 test("pionero LiveKit agent runner passes canonical brain instructions into OpenAI composer", async () => {
   const rooms = [];
   const composeCalls = [];
@@ -2060,6 +2085,8 @@ test("pionero LiveKit agent runner passes canonical brain instructions into Open
   const voiceRuntimeConfig = {
     tenantId: "tenant-brain",
     tenantKey: "tenant-brain",
+    workspaceId: "workspace-brain",
+    workspaceKey: "workspace-brain",
     companyName: "Acme Baku Clinic",
     defaultLanguage: "az",
     businessType: "clinic",
@@ -2139,14 +2166,7 @@ test("pionero LiveKit agent runner passes canonical brain instructions into Open
     now: () => new Date("2026-01-02T03:04:05.000Z"),
     roomName: "pionero-brain-room",
     runtimeApplied: true,
-    tenantContext: {
-      tenantId: "tenant-brain",
-      tenantKey: "tenant-brain",
-    },
     voiceRuntimeConfig,
-    workspaceContext: {
-      workspaceId: "workspace-brain",
-    },
   });
 
   await runner.start();
@@ -2164,9 +2184,9 @@ test("pionero LiveKit agent runner passes canonical brain instructions into Open
 
   assert.equal(composerInput.brainMode, "canonical");
   assert.equal(composerInput.runtimeApplied, true);
-  assert.equal(composerInput.tenantContext.tenantKey, "tenant-brain");
-  assert.equal(composerInput.workspaceContext.workspaceId, "workspace-brain");
-  assert.equal(composerInput.voiceRuntimeConfig.companyName, "Acme Baku Clinic");
+  assert.equal(Object.hasOwn(composerInput, "tenantContext"), false);
+  assert.equal(Object.hasOwn(composerInput, "workspaceContext"), false);
+  assert.equal(Object.hasOwn(composerInput, "voiceRuntimeConfig"), false);
   assert.match(instructions, /Voice assistant brain:/);
   assert.match(instructions, /Acme Baku Clinic/);
   assert.match(instructions, /Approved business context:/);
@@ -2177,6 +2197,12 @@ test("pionero LiveKit agent runner passes canonical brain instructions into Open
   assert.match(instructions, /Please go ahead/);
   assert.match(instructions, /Ask one question at a time/);
   assert.match(instructions, /Do not invent unavailable business facts/);
+  assert.equal(instructions.includes("tenant-brain"), false);
+  assert.equal(instructions.includes("workspace-brain"), false);
+  assert.equal(instructions.includes("Tenant id"), false);
+  assert.equal(instructions.includes("Tenant key"), false);
+  assert.equal(instructions.includes("Workspace id"), false);
+  assert.equal(instructions.includes("Workspace key"), false);
   assert.deepEqual(composeCalls, [
     {
       transcript: "Salam, gorus yazdirmaq isteyirem.",
@@ -2193,6 +2219,8 @@ test("pionero LiveKit agent runner passes canonical brain instructions into Open
     "private-business-summary-secret",
     "private-runtime-instruction-secret",
     "same-day appointment guarantee",
+    "tenant-brain",
+    "workspace-brain",
   ]);
 
   await runner.stop();
