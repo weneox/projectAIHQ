@@ -138,6 +138,18 @@ function assertNoRawAudioLeak(payload = {}, rawAudio = "raw-audio-secret") {
   assert.equal(serialized.includes('"audioChunks"'), false);
 }
 
+function assertNoPromptLeak(payload = {}, fragments = []) {
+  const serialized = JSON.stringify(payload);
+
+  assert.equal(serialized.includes("brainInstructions"), false);
+  assert.equal(serialized.includes("Voice assistant brain"), false);
+  assert.equal(serialized.includes("Pionero LiveKit response guard"), false);
+
+  for (const fragment of fragments) {
+    assert.equal(serialized.includes(fragment), false);
+  }
+}
+
 function assertDefaultSttIdle(stt = {}) {
   assert.deepEqual(stt, {
     provider: "soniox",
@@ -2007,6 +2019,181 @@ test("pionero LiveKit agent runner composes OpenAI turn when gated LLM is enable
   assertNoSecretLeak(state, "test-agent-token-secret");
   assertNoSecretLeak(state, "test-openai-token-secret");
   assertNoRawAudioLeak(state);
+
+  await runner.stop();
+});
+
+test("pionero LiveKit agent runner passes canonical brain instructions into OpenAI composer", async () => {
+  const rooms = [];
+  const composeCalls = [];
+  let composerInput = null;
+
+  class FakeRoom {
+    constructor() {
+      this.handlers = new Map();
+      rooms.push(this);
+    }
+
+    async connect() {}
+
+    on(eventName, handler) {
+      const handlers = this.handlers.get(eventName) || new Set();
+      handlers.add(handler);
+      this.handlers.set(eventName, handlers);
+      return this;
+    }
+
+    off(eventName, handler) {
+      this.handlers.get(eventName)?.delete(handler);
+      return this;
+    }
+
+    async emit(eventName, ...args) {
+      const results = [];
+      this.handlers.get(eventName)?.forEach((handler) => {
+        results.push(handler(...args));
+      });
+      await Promise.all(results);
+    }
+  }
+
+  const voiceRuntimeConfig = {
+    tenantId: "tenant-brain",
+    tenantKey: "tenant-brain",
+    companyName: "Acme Baku Clinic",
+    defaultLanguage: "az",
+    businessType: "clinic",
+    businessSummary: "private-business-summary-secret",
+    voiceProfile: {
+      assistantName: "Leyla",
+      roleLabel: "voice receptionist",
+      tone: "warm",
+      answerStyle: "short_clear",
+      askStyle: "single_question",
+      businessSummary: "private-business-summary-secret",
+      services: ["appointment"],
+    },
+    voiceBehavior: {
+      qualificationQuestions: ["Preferred visit date"],
+      disallowedClaims: ["same-day appointment guarantee"],
+    },
+    realtime: {
+      instructions: "private-runtime-instruction-secret",
+    },
+  };
+
+  const runner = createPioneroLiveKitAgentRunner({
+    RoomClass: FakeRoom,
+    audioIngestEventNames: ["testAudioFrame"],
+    createAgentToken: async () => ({
+      provider: "livekit",
+      url: "wss://livekit.example.test",
+      roomName: "pionero-brain-room",
+      agentIdentity: "aihq-pionero-agent",
+      agentName: "AIHQ Pionero Agent",
+      token: "test-agent-token-secret",
+    }),
+    createSttSession: async () => ({
+      provider: "soniox",
+      async transcribe() {
+        return {
+          ok: true,
+          status: "transcribed",
+          provider: "soniox",
+          stage: "stt",
+          text: "Salam, gorus yazdirmaq isteyirem.",
+          transcribedAt: "2026-01-02T03:04:06.000Z",
+          networkIo: true,
+          rawAudio: "raw-audio-secret",
+        };
+      },
+    }),
+    createLlmTurnComposer: async (input = {}) => {
+      composerInput = input;
+      return {
+        provider: "openai",
+        configured: true,
+        enabled: true,
+        async composeTurn(composeInput = {}) {
+          composeCalls.push(composeInput);
+          return {
+            ok: true,
+            status: "composed",
+            provider: "openai",
+            model: "gpt-test",
+            networkIo: true,
+            inputTranscript: composeInput.transcript,
+            responseText: "Salam, hansi gun ucun gorus isteyirsiniz?",
+            composedAt: "2026-01-02T03:04:07.000Z",
+            token: "test-openai-token-secret",
+          };
+        },
+      };
+    },
+    env: createLiveKitEnv({
+      PIONERO_LIVEKIT_STT_ENABLED: "1",
+      PIONERO_LIVEKIT_STT_FLUSH_MS: "1",
+      PIONERO_LIVEKIT_LLM_ENABLED: "1",
+    }),
+    logger: createTestLogger(),
+    now: () => new Date("2026-01-02T03:04:05.000Z"),
+    roomName: "pionero-brain-room",
+    runtimeApplied: true,
+    tenantContext: {
+      tenantId: "tenant-brain",
+      tenantKey: "tenant-brain",
+    },
+    voiceRuntimeConfig,
+    workspaceContext: {
+      workspaceId: "workspace-brain",
+    },
+  });
+
+  await runner.start();
+  await rooms[0].emit("testAudioFrame", {
+    byteLength: 7,
+    data: new Uint8Array([1, 2, 3, 4, 5, 6, 7]),
+    rawAudio: "raw-audio-secret",
+  });
+  await new Promise((resolve) => {
+    setTimeout(resolve, 5);
+  });
+
+  const state = runner.getState();
+  const instructions = composerInput?.brainInstructions || "";
+
+  assert.equal(composerInput.brainMode, "canonical");
+  assert.equal(composerInput.runtimeApplied, true);
+  assert.equal(composerInput.tenantContext.tenantKey, "tenant-brain");
+  assert.equal(composerInput.workspaceContext.workspaceId, "workspace-brain");
+  assert.equal(composerInput.voiceRuntimeConfig.companyName, "Acme Baku Clinic");
+  assert.match(instructions, /Voice assistant brain:/);
+  assert.match(instructions, /Acme Baku Clinic/);
+  assert.match(instructions, /Approved business context:/);
+  assert.match(
+    instructions,
+    /Always reply in Azerbaijani unless the caller explicitly requests another language\./
+  );
+  assert.match(instructions, /Please go ahead/);
+  assert.match(instructions, /Ask one question at a time/);
+  assert.match(instructions, /Do not invent unavailable business facts/);
+  assert.deepEqual(composeCalls, [
+    {
+      transcript: "Salam, gorus yazdirmaq isteyirem.",
+      roomName: "pionero-brain-room",
+    },
+  ]);
+  assert.equal(state.llm.provider, "openai");
+  assert.equal(state.llm.status, "turn_plan_built");
+  assert.equal(state.llm.lastPlannedResponse, "Salam, hansi gun ucun gorus isteyirsiniz?");
+  assertNoSecretLeak(state, "test-agent-token-secret");
+  assertNoSecretLeak(state, "test-openai-token-secret");
+  assertNoRawAudioLeak(state);
+  assertNoPromptLeak(state, [
+    "private-business-summary-secret",
+    "private-runtime-instruction-secret",
+    "same-day appointment guarantee",
+  ]);
 
   await runner.stop();
 });
