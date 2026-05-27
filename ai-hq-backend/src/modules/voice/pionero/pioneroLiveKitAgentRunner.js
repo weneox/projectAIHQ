@@ -72,6 +72,7 @@ const DEFAULT_STT_FLUSH_FRAMES = 3;
 const DEFAULT_TTS_AUDIO_FORMAT = "pcm_s16le";
 const DEFAULT_TTS_SAMPLE_RATE_HZ = 24000;
 const DEFAULT_TTS_MIME_TYPE = "audio/pcm; codecs=pcm_s16le; rate=24000";
+const DEFAULT_TTS_TIMEOUT_MS = 12_000;
 const SAFE_DIAGNOSTIC_TEXT_MAX_LENGTH = 96;
 const UNSAFE_DIAGNOSTIC_TEXT_PATTERNS = [
   "token",
@@ -1434,6 +1435,11 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
     DEFAULT_STT_FLUSH_FRAMES,
     { min: 1, max: 120 }
   );
+  const ttsTimeoutMs = readBoundedInteger(
+    env.PIONERO_LIVEKIT_TTS_TIMEOUT_MS,
+    DEFAULT_TTS_TIMEOUT_MS,
+    { min: 1_000, max: 60_000 }
+  );
   const brainRuntimeConfig = obj(voiceRuntimeConfig || runtimeConfig);
   const pioneroBrain = buildPioneroVoiceBrainInstructions({
     runtimeConfig: brainRuntimeConfig,
@@ -1757,6 +1763,35 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
     }
   }
 
+  async function synthesizeTtsWithTimeout(session, input = {}) {
+    let timeoutId = null;
+    const timeoutResult = new Promise((resolve) => {
+      timeoutId = setTimeout(() => {
+        resolve({
+          ok: false,
+          provider: "soniox",
+          stage: "tts",
+          networkIo: true,
+          reasonCode: "soniox_tts_synthesis_timeout",
+          errorMessage: "soniox_tts_synthesis_timeout",
+          lastAudioPlan: "soniox_tts_audio_timeout",
+        });
+      }, ttsTimeoutMs);
+      timeoutId?.unref?.();
+    });
+
+    try {
+      return await Promise.race([
+        Promise.resolve().then(() => session.synthesize(input)),
+        timeoutResult,
+      ]);
+    } finally {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    }
+  }
+
   async function synthesizeOrPlanTts(text = "") {
     const inputText = s(text).slice(0, 2_000);
 
@@ -1793,7 +1828,7 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
     let result = null;
 
     try {
-      result = await session.synthesize({
+      result = await synthesizeTtsWithTimeout(session, {
         text: inputText,
         streamId: `pionero-tts-${nextAttempt}`,
       });
@@ -1811,6 +1846,7 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
     const audioBuffer = readTtsAudioBuffer(result);
     const audioByteLength = n(result?.audioByteLength || audioBuffer?.byteLength);
     const audioChunkCount = n(result?.audioChunkCount);
+    const failedReasonCode = s(result?.reasonCode, "soniox_tts_session_failed");
 
     if (result?.ok === true && audioBuffer && audioByteLength > 0) {
       const synthesizedAt = s(result.synthesizedAt, readNowISOString(now));
@@ -1856,9 +1892,11 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
       status: "error",
       synthesesFailed: currentTts.synthesesFailed + 1,
       lastInputText: inputText,
-      lastAudioPlan: "",
+      lastAudioPlan: failedReasonCode === "soniox_tts_synthesis_timeout"
+        ? "soniox_tts_audio_timeout"
+        : "",
       errorMessage: s(result?.errorMessage).slice(0, 500),
-      reasonCode: s(result?.reasonCode, "soniox_tts_session_failed"),
+      reasonCode: failedReasonCode,
       networkIo: result?.networkIo === true,
     });
 
