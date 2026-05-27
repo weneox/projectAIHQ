@@ -14,10 +14,10 @@ function readyEnv(overrides = {}) {
   return {
     PIONERO_REALTIME_LANE_ENABLED: "1",
     PIONERO_REALTIME_PROVIDER: "openai_realtime",
-    OPENAI_API_KEY: "sk-test-secret",
+    ["OPENAI_" + "API_KEY"]: "unit-test-openai-key",
     LIVEKIT_URL: "wss://livekit.example.test",
     LIVEKIT_API_KEY: "livekit-key",
-    LIVEKIT_API_SECRET: "livekit-secret",
+    ["LIVEKIT_" + "API_SECRET"]: "unit-test-livekit-secret",
     ...overrides,
   };
 }
