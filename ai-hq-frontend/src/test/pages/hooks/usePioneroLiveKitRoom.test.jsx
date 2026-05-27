@@ -251,6 +251,21 @@ async function flushPromises() {
   });
 }
 
+function createDeferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+
+  return {
+    promise,
+    reject,
+    resolve,
+  };
+}
+
 describe("usePioneroLiveKitRoom", () => {
   beforeEach(() => {
     mockLiveKit.rooms.length = 0;
@@ -788,6 +803,285 @@ describe("usePioneroLiveKitRoom", () => {
     expect(result.current.agentNetworkIo).toBe(true);
     expect(result.current.agentReady).toBe(true);
     expect(result.current.agentAudioIngestStatus).toBe("waiting_for_audio");
+  });
+
+  it("polls agent status automatically while the Pionero room is live", async () => {
+    vi.useFakeTimers();
+    let unmount = () => {};
+
+    try {
+      const createPioneroLiveKitSession = vi
+        .fn()
+        .mockResolvedValue(buildSession());
+      const startPioneroLiveKitAgentPlan = vi
+        .fn()
+        .mockResolvedValue(buildAgentPlan());
+      const getPioneroLiveKitAgentStatus = vi.fn().mockResolvedValue(
+        buildAgentPlan({
+          status: "connected",
+          networkIo: true,
+          reasonCode: "",
+        })
+      );
+      mockLiveKit.createLocalAudioTrack.mockResolvedValue({ stop: vi.fn() });
+
+      const rendered = renderHook(() =>
+        usePioneroLiveKitRoom({
+          createPioneroLiveKitSession,
+          getPioneroLiveKitAgentStatus,
+          startPioneroLiveKitAgentPlan,
+        })
+      );
+      unmount = rendered.unmount;
+
+      await act(async () => {
+        await rendered.result.current.connect();
+      });
+
+      expect(getPioneroLiveKitAgentStatus).not.toHaveBeenCalled();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_000);
+      });
+      await flushPromises();
+
+      expect(getPioneroLiveKitAgentStatus).toHaveBeenCalledWith({
+        roomName: "pionero-browser-test",
+      });
+      expect(rendered.result.current.agentStatus).toBe("connected");
+      expect(rendered.result.current.agentNetworkIo).toBe(true);
+    } finally {
+      unmount();
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  it("plays agent audio when a polled status observes synthesized speech", async () => {
+    vi.useFakeTimers();
+    const playback = stubAgentAudioPlayback();
+    let unmount = () => {};
+
+    try {
+      const createPioneroLiveKitSession = vi
+        .fn()
+        .mockResolvedValue(buildSession());
+      const startPioneroLiveKitAgentPlan = vi
+        .fn()
+        .mockResolvedValue(buildAgentPlan());
+      const getPioneroLiveKitAgentStatus = vi.fn().mockResolvedValue(
+        buildSynthesizedAgentPlan()
+      );
+      const getPioneroLiveKitAgentAudio = vi
+        .fn()
+        .mockResolvedValue(buildAgentAudioPayload());
+      mockLiveKit.createLocalAudioTrack.mockResolvedValue({ stop: vi.fn() });
+
+      const rendered = renderHook(() =>
+        usePioneroLiveKitRoom({
+          createPioneroLiveKitSession,
+          getPioneroLiveKitAgentAudio,
+          getPioneroLiveKitAgentStatus,
+          startPioneroLiveKitAgentPlan,
+        })
+      );
+      unmount = rendered.unmount;
+
+      await act(async () => {
+        await rendered.result.current.connect();
+      });
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_000);
+      });
+      await flushPromises();
+      await flushPromises();
+
+      expect(getPioneroLiveKitAgentAudio).toHaveBeenCalledWith({
+        roomName: "pionero-browser-test",
+      });
+      expect(playback.play).toHaveBeenCalledTimes(1);
+      expect(rendered.result.current.agentAudioPlaybackStatus).toBe("played");
+    } finally {
+      unmount();
+      vi.clearAllTimers();
+      vi.useRealTimers();
+      playback.restore();
+    }
+  });
+
+  it("does not replay duplicate synthesized counts observed by polling", async () => {
+    vi.useFakeTimers();
+    const playback = stubAgentAudioPlayback();
+    let unmount = () => {};
+
+    try {
+      const createPioneroLiveKitSession = vi
+        .fn()
+        .mockResolvedValue(buildSession());
+      const startPioneroLiveKitAgentPlan = vi
+        .fn()
+        .mockResolvedValue(buildAgentPlan());
+      const getPioneroLiveKitAgentStatus = vi.fn().mockResolvedValue(
+        buildSynthesizedAgentPlan()
+      );
+      const getPioneroLiveKitAgentAudio = vi
+        .fn()
+        .mockResolvedValue(buildAgentAudioPayload());
+      mockLiveKit.createLocalAudioTrack.mockResolvedValue({ stop: vi.fn() });
+
+      const rendered = renderHook(() =>
+        usePioneroLiveKitRoom({
+          createPioneroLiveKitSession,
+          getPioneroLiveKitAgentAudio,
+          getPioneroLiveKitAgentStatus,
+          startPioneroLiveKitAgentPlan,
+        })
+      );
+      unmount = rendered.unmount;
+
+      await act(async () => {
+        await rendered.result.current.connect();
+      });
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_000);
+      });
+      await flushPromises();
+      await flushPromises();
+      expect(playback.play).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_000);
+      });
+      await flushPromises();
+      await flushPromises();
+
+      expect(getPioneroLiveKitAgentStatus).toHaveBeenCalledTimes(2);
+      expect(getPioneroLiveKitAgentAudio).toHaveBeenCalledTimes(1);
+      expect(playback.play).toHaveBeenCalledTimes(1);
+    } finally {
+      unmount();
+      vi.clearAllTimers();
+      vi.useRealTimers();
+      playback.restore();
+    }
+  });
+
+  it("stops polling agent status after disconnect", async () => {
+    vi.useFakeTimers();
+    let unmount = () => {};
+
+    try {
+      const createPioneroLiveKitSession = vi
+        .fn()
+        .mockResolvedValue(buildSession());
+      const startPioneroLiveKitAgentPlan = vi
+        .fn()
+        .mockResolvedValue(buildAgentPlan());
+      const stopPioneroLiveKitAgentPlan = vi
+        .fn()
+        .mockResolvedValue(buildAgentPlan({ status: "stopped" }));
+      const getPioneroLiveKitAgentStatus = vi.fn().mockResolvedValue(
+        buildAgentPlan({ status: "connected" })
+      );
+      mockLiveKit.createLocalAudioTrack.mockResolvedValue({ stop: vi.fn() });
+
+      const rendered = renderHook(() =>
+        usePioneroLiveKitRoom({
+          createPioneroLiveKitSession,
+          getPioneroLiveKitAgentStatus,
+          startPioneroLiveKitAgentPlan,
+          stopPioneroLiveKitAgentPlan,
+        })
+      );
+      unmount = rendered.unmount;
+
+      await act(async () => {
+        await rendered.result.current.connect();
+      });
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_000);
+      });
+      await flushPromises();
+      expect(getPioneroLiveKitAgentStatus).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        await rendered.result.current.disconnect();
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3_000);
+      });
+      await flushPromises();
+
+      expect(getPioneroLiveKitAgentStatus).toHaveBeenCalledTimes(1);
+      expect(rendered.result.current.status).toBe("idle");
+    } finally {
+      unmount();
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  it("skips polling ticks while an agent status request is still in flight", async () => {
+    vi.useFakeTimers();
+    let unmount = () => {};
+
+    try {
+      const pendingStatus = createDeferred();
+      const createPioneroLiveKitSession = vi
+        .fn()
+        .mockResolvedValue(buildSession());
+      const startPioneroLiveKitAgentPlan = vi
+        .fn()
+        .mockResolvedValue(buildAgentPlan());
+      const getPioneroLiveKitAgentStatus = vi
+        .fn()
+        .mockReturnValueOnce(pendingStatus.promise)
+        .mockResolvedValue(buildAgentPlan({ status: "connected" }));
+      mockLiveKit.createLocalAudioTrack.mockResolvedValue({ stop: vi.fn() });
+
+      const rendered = renderHook(() =>
+        usePioneroLiveKitRoom({
+          createPioneroLiveKitSession,
+          getPioneroLiveKitAgentStatus,
+          startPioneroLiveKitAgentPlan,
+        })
+      );
+      unmount = rendered.unmount;
+
+      await act(async () => {
+        await rendered.result.current.connect();
+      });
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_000);
+      });
+      expect(getPioneroLiveKitAgentStatus).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3_000);
+      });
+      expect(getPioneroLiveKitAgentStatus).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        pendingStatus.resolve(buildAgentPlan({ status: "connected" }));
+        await pendingStatus.promise;
+      });
+      await flushPromises();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_000);
+      });
+      await flushPromises();
+
+      expect(getPioneroLiveKitAgentStatus).toHaveBeenCalledTimes(2);
+    } finally {
+      unmount();
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
   });
 
   it("plays newly synthesized agent audio using the returned WAV content type", async () => {

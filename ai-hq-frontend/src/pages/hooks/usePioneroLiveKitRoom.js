@@ -73,6 +73,7 @@ const TTS_STATUSES = new Set([
 const PIONERO_TTS_DEFAULT_SAMPLE_RATE_HZ = 24000;
 const PIONERO_AGENT_AUDIO_RETRY_ATTEMPTS = 5;
 const PIONERO_AGENT_AUDIO_RETRY_DELAY_MS = 400;
+const PIONERO_AGENT_STATUS_POLL_INTERVAL_MS = 1000;
 const PIONERO_AGENT_AUDIO_NOT_READY_REASON_CODE =
   "pionero_agent_tts_audio_not_found";
 
@@ -508,6 +509,8 @@ export default function usePioneroLiveKitRoom({
   const roomListenersRef = useRef(null);
   const roomRef = useRef(null);
   const statusRef = useRef("idle");
+  const monitorOnlyModeRef = useRef(monitorOnlyMode);
+  const agentStatusPollInFlightRef = useRef(false);
   const agentAudioElementRef = useRef(null);
   const agentAudioObjectUrlRef = useRef("");
   const agentAudioRetryGenerationRef = useRef(0);
@@ -534,6 +537,13 @@ export default function usePioneroLiveKitRoom({
 
     return nextParticipants;
   }, []);
+
+  const shouldPollAgentStatus = useCallback(() => (
+    mountedRef.current &&
+    statusRef.current === "live" &&
+    Boolean(s(runtimeRoomNameRef.current)) &&
+    monitorOnlyModeRef.current === false
+  ), []);
 
   const isAgentAudioRetryActive = useCallback((request = {}) => {
     const targetRoomName = s(request.roomName);
@@ -937,6 +947,15 @@ export default function usePioneroLiveKitRoom({
       };
     }
 
+    if (agentStatusPollInFlightRef.current) {
+      return {
+        ok: false,
+        status: "busy",
+      };
+    }
+
+    agentStatusPollInFlightRef.current = true;
+
     try {
       const agentState = await getPioneroLiveKitAgentStatus({
         roomName: nextRoomName,
@@ -961,6 +980,8 @@ export default function usePioneroLiveKitRoom({
         ok: false,
         status: "warning",
       };
+    } finally {
+      agentStatusPollInFlightRef.current = false;
     }
   }, [
     getPioneroLiveKitAgentStatus,
@@ -1097,6 +1118,7 @@ export default function usePioneroLiveKitRoom({
       runtimeRoomNameRef.current = nextRoomName;
 
       const preStartMonitorOnlyMode = readPioneroMonitorOnlyMode();
+      monitorOnlyModeRef.current = preStartMonitorOnlyMode;
 
       if (mountedRef.current) {
         setMonitorOnlyMode(preStartMonitorOnlyMode);
@@ -1159,6 +1181,7 @@ export default function usePioneroLiveKitRoom({
       setSafeStatus("live");
 
       const nextMonitorOnlyMode = readPioneroMonitorOnlyMode();
+      monitorOnlyModeRef.current = nextMonitorOnlyMode;
 
       if (mountedRef.current) {
         setMonitorOnlyMode(nextMonitorOnlyMode);
@@ -1268,6 +1291,47 @@ export default function usePioneroLiveKitRoom({
       void disconnect({ updateState: false });
     };
   }, [disconnect]);
+
+  useEffect(() => {
+    monitorOnlyModeRef.current = monitorOnlyMode;
+  }, [monitorOnlyMode]);
+
+  useEffect(() => {
+    if (
+      status !== "live" ||
+      monitorOnlyMode ||
+      !s(runtimeRoomNameRef.current)
+    ) {
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    const pollAgentStatus = async () => {
+      if (
+        cancelled ||
+        !shouldPollAgentStatus()
+      ) {
+        return;
+      }
+
+      await refreshAgentStatus();
+    };
+
+    const intervalId = window.setInterval(() => {
+      void pollAgentStatus();
+    }, PIONERO_AGENT_STATUS_POLL_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [
+    monitorOnlyMode,
+    refreshAgentStatus,
+    shouldPollAgentStatus,
+    status,
+  ]);
 
   return {
     status,
