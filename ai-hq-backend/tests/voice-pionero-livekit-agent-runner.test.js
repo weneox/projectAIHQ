@@ -129,8 +129,9 @@ function assertNoRawAudioLeak(payload = {}, rawAudio = "raw-audio-secret") {
   const serialized = JSON.stringify(payload);
 
   assert.equal(serialized.includes(rawAudio), false);
-  assert.equal(serialized.includes("audioBase64"), false);
-  assert.equal(serialized.includes("audioChunk"), false);
+  assert.equal(serialized.includes('"audioBase64"'), false);
+  assert.equal(serialized.includes('"audioChunk"'), false);
+  assert.equal(serialized.includes('"audioChunks"'), false);
 }
 
 function assertDefaultSttIdle(stt = {}) {
@@ -178,6 +179,12 @@ function assertDefaultTts(tts = {}, status = "idle") {
     lastAudioPlan: "",
     lastObservedAt: "",
     reasonCode: "tts_not_started",
+    synthesesAttempted: 0,
+    synthesesSucceeded: 0,
+    synthesesFailed: 0,
+    audioByteLength: 0,
+    audioChunkCount: 0,
+    errorMessage: "",
     networkIo: false,
   });
 }
@@ -626,6 +633,12 @@ test("pionero TTS plan helper stores safe speech plan only", () => {
     lastAudioPlan: "TTS plan pending real synthesis.",
     lastObservedAt: "2026-01-02T03:04:13.000Z",
     reasonCode: "",
+    synthesesAttempted: 0,
+    synthesesSucceeded: 0,
+    synthesesFailed: 0,
+    audioByteLength: 0,
+    audioChunkCount: 0,
+    errorMessage: "",
     networkIo: false,
   });
   assertNoSecretLeak(state, "test-helper-token-secret");
@@ -1842,6 +1855,12 @@ test("pionero LiveKit agent runner flushes buffered audio into fake STT session"
     lastAudioPlan: "TTS plan pending real synthesis.",
     lastObservedAt: "2026-01-02T03:04:05.000Z",
     reasonCode: "",
+    synthesesAttempted: 0,
+    synthesesSucceeded: 0,
+    synthesesFailed: 0,
+    audioByteLength: 0,
+    audioChunkCount: 0,
+    errorMessage: "",
     networkIo: false,
   });
   assertNoSecretLeak(state, "test-agent-token-secret");
@@ -1984,6 +2003,305 @@ test("pionero LiveKit agent runner composes OpenAI turn when gated LLM is enable
   assertNoSecretLeak(state, "test-agent-token-secret");
   assertNoSecretLeak(state, "test-openai-token-secret");
   assertNoRawAudioLeak(state);
+
+  await runner.stop();
+});
+
+test("pionero LiveKit agent runner synthesizes Soniox TTS when gated TTS is enabled", async () => {
+  const rooms = [];
+  const ttsCalls = [];
+
+  class FakeRoom {
+    constructor() {
+      this.handlers = new Map();
+      rooms.push(this);
+    }
+
+    async connect() {}
+
+    on(eventName, handler) {
+      const handlers = this.handlers.get(eventName) || new Set();
+      handlers.add(handler);
+      this.handlers.set(eventName, handlers);
+      return this;
+    }
+
+    off(eventName, handler) {
+      this.handlers.get(eventName)?.delete(handler);
+      return this;
+    }
+
+    async emit(eventName, ...args) {
+      const results = [];
+      this.handlers.get(eventName)?.forEach((handler) => {
+        results.push(handler(...args));
+      });
+      await Promise.all(results);
+    }
+  }
+
+  const runner = createPioneroLiveKitAgentRunner({
+    RoomClass: FakeRoom,
+    audioIngestEventNames: ["testAudioFrame"],
+    createAgentToken: async () => ({
+      provider: "livekit",
+      url: "wss://livekit.example.test",
+      roomName: "pionero-demo-room",
+      agentIdentity: "aihq-pionero-agent",
+      agentName: "AIHQ Pionero Agent",
+      token: "test-agent-token-secret",
+    }),
+    createSttSession: async () => ({
+      provider: "soniox",
+      async transcribe() {
+        return {
+          ok: true,
+          status: "transcribed",
+          provider: "soniox",
+          stage: "stt",
+          text: "1-2-3.",
+          transcribedAt: "2026-01-02T03:04:06.000Z",
+          networkIo: true,
+          rawAudio: "raw-audio-secret",
+        };
+      },
+    }),
+    createLlmTurnComposer: async () => ({
+      provider: "openai",
+      configured: true,
+      enabled: true,
+      async composeTurn() {
+        return {
+          ok: true,
+          status: "composed",
+          provider: "openai",
+          model: "gpt-test",
+          networkIo: true,
+          responseText: "Sure, I heard 1-2-3.",
+          composedAt: "2026-01-02T03:04:07.000Z",
+          token: "test-openai-token-secret",
+          rawAudio: "raw-audio-secret",
+        };
+      },
+    }),
+    createTtsSession: async ({ env, roomName }) => {
+      assert.equal(env.PIONERO_LIVEKIT_TTS_ENABLED, "1");
+      assert.equal(roomName, "pionero-demo-room");
+
+      return {
+        provider: "soniox",
+        configured: true,
+        async synthesize(input = {}) {
+          ttsCalls.push(input);
+          return {
+            ok: true,
+            status: "synthesized",
+            provider: "soniox",
+            stage: "tts",
+            networkIo: true,
+            audio: Buffer.from("fake-audio-bytes"),
+            audioChunkCount: 1,
+            audioByteLength: Buffer.byteLength("fake-audio-bytes"),
+            synthesizedAt: "2026-01-02T03:04:08.000Z",
+            token: "test-tts-token-secret",
+            apiSecret: "test-tts-secret",
+            rawAudio: "fake-tts-raw-audio-secret",
+            audioBase64: "fake-tts-audio-base64-secret",
+          };
+        },
+      };
+    },
+    env: createLiveKitEnv({
+      PIONERO_LIVEKIT_STT_ENABLED: "1",
+      PIONERO_LIVEKIT_STT_FLUSH_MS: "1",
+      PIONERO_LIVEKIT_LLM_ENABLED: "1",
+      PIONERO_LIVEKIT_TTS_ENABLED: "1",
+    }),
+    logger: createTestLogger(),
+    now: () => new Date("2026-01-02T03:04:05.000Z"),
+    roomName: "pionero-demo-room",
+  });
+
+  await runner.start();
+  await rooms[0].emit("testAudioFrame", {
+    byteLength: 7,
+    data: new Uint8Array([1, 2, 3, 4, 5, 6, 7]),
+    rawAudio: "raw-audio-secret",
+  });
+  await new Promise((resolve) => {
+    setTimeout(resolve, 5);
+  });
+
+  const state = runner.getState();
+
+  assert.deepEqual(ttsCalls, [
+    {
+      text: "Sure, I heard 1-2-3.",
+      streamId: "pionero-tts-1",
+    },
+  ]);
+  assert.equal(state.tts.provider, "soniox");
+  assert.equal(state.tts.enabled, true);
+  assert.equal(state.tts.status, "speech_synthesized");
+  assert.equal(state.tts.speechPlansCreated, 1);
+  assert.equal(state.tts.synthesesAttempted, 1);
+  assert.equal(state.tts.synthesesSucceeded, 1);
+  assert.equal(state.tts.synthesesFailed, 0);
+  assert.equal(state.tts.audioByteLength > 0, true);
+  assert.equal(state.tts.audioChunkCount, 1);
+  assert.equal(state.tts.lastInputText, "Sure, I heard 1-2-3.");
+  assert.equal(state.tts.lastAudioPlan, "soniox_tts_audio_ready");
+  assert.equal(state.tts.lastObservedAt, "2026-01-02T03:04:08.000Z");
+  assert.equal(state.tts.reasonCode, "");
+  assert.equal(state.tts.errorMessage, "");
+  assert.equal(state.tts.networkIo, true);
+  assert.equal(Object.hasOwn(state.tts, "audio"), false);
+  assertNoSecretLeak(state, "test-agent-token-secret");
+  assertNoSecretLeak(state, "test-openai-token-secret");
+  assertNoSecretLeak(state, "test-tts-token-secret");
+  assertNoSecretLeak(state, "test-tts-secret");
+  assertNoRawAudioLeak(state);
+  assertNoRawAudioLeak(state, "fake-tts-raw-audio-secret");
+  assertNoRawAudioLeak(state, "fake-tts-audio-base64-secret");
+
+  await runner.stop();
+});
+
+test("pionero LiveKit agent runner records Soniox TTS synthesis failures safely", async () => {
+  const rooms = [];
+  let synthesizeCalls = 0;
+
+  class FakeRoom {
+    constructor() {
+      this.handlers = new Map();
+      rooms.push(this);
+    }
+
+    async connect() {}
+
+    on(eventName, handler) {
+      const handlers = this.handlers.get(eventName) || new Set();
+      handlers.add(handler);
+      this.handlers.set(eventName, handlers);
+      return this;
+    }
+
+    off(eventName, handler) {
+      this.handlers.get(eventName)?.delete(handler);
+      return this;
+    }
+
+    async emit(eventName, ...args) {
+      const results = [];
+      this.handlers.get(eventName)?.forEach((handler) => {
+        results.push(handler(...args));
+      });
+      await Promise.all(results);
+    }
+  }
+
+  const runner = createPioneroLiveKitAgentRunner({
+    RoomClass: FakeRoom,
+    audioIngestEventNames: ["testAudioFrame"],
+    createAgentToken: async () => ({
+      provider: "livekit",
+      url: "wss://livekit.example.test",
+      roomName: "pionero-demo-room",
+      agentIdentity: "aihq-pionero-agent",
+      agentName: "AIHQ Pionero Agent",
+      token: "test-agent-token-secret",
+    }),
+    createSttSession: async () => ({
+      provider: "soniox",
+      async transcribe() {
+        return {
+          ok: true,
+          status: "transcribed",
+          provider: "soniox",
+          stage: "stt",
+          text: "Salam Pionero",
+          transcribedAt: "2026-01-02T03:04:06.000Z",
+          networkIo: true,
+          rawAudio: "raw-audio-secret",
+        };
+      },
+    }),
+    createLlmTurnComposer: async () => ({
+      provider: "openai",
+      configured: true,
+      enabled: true,
+      async composeTurn() {
+        return {
+          ok: true,
+          status: "composed",
+          provider: "openai",
+          networkIo: true,
+          responseText: "Salam, I can help.",
+          composedAt: "2026-01-02T03:04:07.000Z",
+        };
+      },
+    }),
+    createTtsSession: async () => ({
+      provider: "soniox",
+      configured: true,
+      async synthesize() {
+        synthesizeCalls += 1;
+        return {
+          ok: false,
+          status: "failed",
+          provider: "soniox",
+          stage: "tts",
+          networkIo: true,
+          reasonCode: "soniox_tts_fake_failure",
+          errorMessage: "safe failure",
+          token: "test-tts-token-secret",
+          rawAudio: "fake-tts-raw-audio-secret",
+        };
+      },
+    }),
+    env: createLiveKitEnv({
+      PIONERO_LIVEKIT_STT_ENABLED: "1",
+      PIONERO_LIVEKIT_STT_FLUSH_MS: "1",
+      PIONERO_LIVEKIT_LLM_ENABLED: "1",
+      PIONERO_LIVEKIT_TTS_ENABLED: "1",
+    }),
+    logger: createTestLogger(),
+    now: () => new Date("2026-01-02T03:04:05.000Z"),
+    roomName: "pionero-demo-room",
+  });
+
+  await runner.start();
+  await rooms[0].emit("testAudioFrame", {
+    byteLength: 4,
+    data: new Uint8Array([1, 2, 3, 4]),
+    rawAudio: "raw-audio-secret",
+  });
+  await new Promise((resolve) => {
+    setTimeout(resolve, 5);
+  });
+
+  const state = runner.getState();
+
+  assert.equal(synthesizeCalls, 1);
+  assert.equal(state.status, "connected");
+  assert.equal(state.tts.provider, "soniox");
+  assert.equal(state.tts.enabled, true);
+  assert.equal(state.tts.status, "error");
+  assert.equal(state.tts.speechPlansCreated, 1);
+  assert.equal(state.tts.synthesesAttempted, 1);
+  assert.equal(state.tts.synthesesSucceeded, 0);
+  assert.equal(state.tts.synthesesFailed, 1);
+  assert.equal(state.tts.audioByteLength, 0);
+  assert.equal(state.tts.audioChunkCount, 0);
+  assert.equal(state.tts.lastInputText, "Salam, I can help.");
+  assert.equal(state.tts.lastAudioPlan, "");
+  assert.equal(state.tts.errorMessage, "safe_failure");
+  assert.equal(state.tts.reasonCode, "soniox_tts_fake_failure");
+  assert.equal(state.tts.networkIo, true);
+  assertNoSecretLeak(state, "test-agent-token-secret");
+  assertNoSecretLeak(state, "test-tts-token-secret");
+  assertNoRawAudioLeak(state);
+  assertNoRawAudioLeak(state, "fake-tts-raw-audio-secret");
 
   await runner.stop();
 });

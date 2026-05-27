@@ -9,6 +9,9 @@ import {
   createSonioxSttSession,
 } from "../speech/providers/sonioxSttSession.js";
 import {
+  createSonioxTtsSession,
+} from "../speech/providers/sonioxTtsSession.js";
+import {
   createOpenAiTurnComposer,
 } from "../llm/providers/openaiTurnComposer.js";
 import { s } from "../shared.js";
@@ -37,6 +40,8 @@ const PIONERO_TTS_STATUSES = new Set([
   "idle",
   "planned",
   "speech_plan_built",
+  "synthesizing",
+  "speech_synthesized",
   "error",
 ]);
 const DEFAULT_ROOM_AUDIO_EVENT_NAMES = [
@@ -485,9 +490,13 @@ function buildPioneroLlmState(input = {}) {
 
 function buildPioneroTtsState(input = {}) {
   const status = s(input.status, "idle");
+  const provider = s(input.provider, "cartesia") === "soniox"
+    ? "soniox"
+    : "cartesia";
+  const errorMessage = normalizeSafeDiagnosticText(input.errorMessage);
 
   return {
-    provider: "cartesia",
+    provider,
     enabled: input.enabled === true,
     status: PIONERO_TTS_STATUSES.has(status) ? status : "idle",
     speechPlansCreated: n(input.speechPlansCreated),
@@ -495,7 +504,13 @@ function buildPioneroTtsState(input = {}) {
     lastAudioPlan: s(input.lastAudioPlan || input.audioPlan).slice(0, 2_000),
     lastObservedAt: s(input.lastObservedAt),
     reasonCode: s(input.reasonCode),
-    networkIo: false,
+    synthesesAttempted: n(input.synthesesAttempted),
+    synthesesSucceeded: n(input.synthesesSucceeded),
+    synthesesFailed: n(input.synthesesFailed),
+    audioByteLength: n(input.audioByteLength),
+    audioChunkCount: n(input.audioChunkCount),
+    errorMessage,
+    networkIo: input.networkIo === true,
   };
 }
 
@@ -658,6 +673,12 @@ function readInitialTts(input = {}, { status } = {}) {
     lastAudioPlan: "",
     lastObservedAt: "",
     reasonCode: "tts_not_started",
+    synthesesAttempted: 0,
+    synthesesSucceeded: 0,
+    synthesesFailed: 0,
+    audioByteLength: 0,
+    audioChunkCount: 0,
+    errorMessage: "",
     networkIo: false,
   };
 }
@@ -1212,6 +1233,12 @@ export function recordPioneroTtsPlan(state = {}, input = {}, options = {}) {
         readNowISOString(options.now)
       ),
       reasonCode: "",
+      synthesesAttempted: currentTts.synthesesAttempted,
+      synthesesSucceeded: currentTts.synthesesSucceeded,
+      synthesesFailed: currentTts.synthesesFailed,
+      audioByteLength: currentTts.audioByteLength,
+      audioChunkCount: currentTts.audioChunkCount,
+      errorMessage: "",
       networkIo: false,
     },
   };
@@ -1327,6 +1354,7 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
     createAgentToken = createPioneroLiveKitAgentToken,
     createLlmTurnComposer = null,
     createSttSession = null,
+    createTtsSession = null,
     env = process.env,
     logger = null,
     now = null,
@@ -1341,6 +1369,7 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
   };
   const llmEnabled = isEnabled(env.PIONERO_LIVEKIT_LLM_ENABLED);
   const sttEnabled = isEnabled(env.PIONERO_LIVEKIT_STT_ENABLED);
+  const ttsEnabled = isEnabled(env.PIONERO_LIVEKIT_TTS_ENABLED);
   const sttMaxFrames = readBoundedInteger(
     env.PIONERO_LIVEKIT_STT_MAX_FRAMES,
     DEFAULT_STT_MAX_FRAMES,
@@ -1365,10 +1394,12 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
   let sttFlushPromise = null;
   let llmTurnComposer = null;
   let llmTurnComposerResolved = false;
+  let ttsSession = null;
+  let ttsSessionResolved = false;
   let currentState = buildPioneroLiveKitAgentRunnerState({
     env,
     roomName,
-    });
+  });
   let cleanupAudioIngestListeners = [];
   let audioStreamReaders = [];
   const audioStreamTrackRefs = new WeakSet();
@@ -1417,6 +1448,15 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
     currentState = {
       ...safeStateObject(currentState),
       llm: buildPioneroLlmState(nextLlm),
+    };
+
+    return currentState;
+  }
+
+  function setTtsState(nextTts = {}) {
+    currentState = {
+      ...safeStateObject(currentState),
+      tts: buildPioneroTtsState(nextTts),
     };
 
     return currentState;
@@ -1744,151 +1784,6 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
     return currentState;
   }
 
-  async function getTtsSession() {
-    if (!ttsEnabled) return null;
-    if (ttsSessionResolved) return ttsSession;
-
-    ttsSessionResolved = true;
-
-    try {
-      const session = createTtsSession
-        ? await createTtsSession({
-            env,
-            logger,
-            now,
-            roomName,
-          })
-        : await createPioneroSonioxTtsSessionFactory({
-            env,
-            now,
-          })({
-            env,
-            now,
-            roomName,
-          });
-
-      if (!session || session.ok === false || session.configured === false) {
-        setTtsState({
-          ...currentState.tts,
-          provider: "soniox",
-          enabled: false,
-          status: "error",
-          reasonCode: s(session?.reasonCode, "soniox_tts_session_create_failed"),
-          networkIo: session?.networkIo === true,
-        });
-
-        return null;
-      }
-
-      ttsSession = session;
-      return ttsSession;
-    } catch {
-      logger?.warn?.("pionero.livekit.agent_runner.tts_session_unavailable", {
-        reasonCode: "soniox_tts_session_create_failed",
-        error: null,
-      });
-      setTtsState({
-        ...currentState.tts,
-        provider: "soniox",
-        enabled: false,
-        status: "error",
-        reasonCode: "soniox_tts_session_create_failed",
-        networkIo: false,
-      });
-
-      return null;
-    }
-  }
-
-  async function synthesizeOrPlanTts(text = "") {
-    const inputText = s(text).slice(0, 2_000);
-
-    if (!inputText) return currentState;
-
-    if (!ttsEnabled) {
-      currentState = recordPioneroTtsPlan(currentState, {
-        text: inputText,
-      }, { now });
-
-      return currentState;
-    }
-
-    const session = await getTtsSession();
-
-    if (!session || typeof session.synthesize !== "function") return currentState;
-
-    const startingTts = buildPioneroTtsState(currentState.tts);
-    const nextAttempt = startingTts.synthesesAttempted + 1;
-
-    setTtsState({
-      ...startingTts,
-      provider: "soniox",
-      enabled: true,
-      status: "synthesizing",
-      speechPlansCreated: startingTts.speechPlansCreated + 1,
-      synthesesAttempted: nextAttempt,
-      lastInputText: inputText,
-      lastAudioPlan: "soniox_tts_audio_requested",
-      reasonCode: "",
-      networkIo: false,
-    });
-
-    let result = null;
-
-    try {
-      result = await session.synthesize({
-        text: inputText,
-        streamId: `pionero-tts-${nextAttempt}`,
-      });
-    } catch {
-      result = {
-        ok: false,
-        provider: "soniox",
-        stage: "tts",
-        networkIo: true,
-        reasonCode: "soniox_tts_session_failed",
-      };
-    }
-
-    const currentTts = buildPioneroTtsState(currentState.tts);
-    const audioByteLength = n(result?.audioByteLength || result?.audio?.byteLength);
-    const audioChunkCount = n(result?.audioChunkCount);
-
-    if (result?.ok === true && audioByteLength > 0) {
-      setTtsState({
-        ...currentTts,
-        provider: "soniox",
-        enabled: true,
-        status: "speech_synthesized",
-        synthesesSucceeded: currentTts.synthesesSucceeded + 1,
-        audioByteLength,
-        audioChunkCount,
-        lastInputText: inputText,
-        lastAudioPlan: "soniox_tts_audio_ready",
-        lastObservedAt: s(result.synthesizedAt, readNowISOString(now)),
-        reasonCode: "",
-        networkIo: result.networkIo === true,
-      });
-
-      return currentState;
-    }
-
-    setTtsState({
-      ...currentTts,
-      provider: "soniox",
-      enabled: true,
-      status: "error",
-      synthesesFailed: currentTts.synthesesFailed + 1,
-      lastInputText: inputText,
-      lastAudioPlan: "",
-      errorMessage: s(result?.errorMessage).slice(0, 500),
-      reasonCode: s(result?.reasonCode, "soniox_tts_session_failed"),
-      networkIo: result?.networkIo === true,
-    });
-
-    return currentState;
-  }
-
   async function recordTranscriptTurnPlans(transcriptResult = {}) {
     if (isFailedTranscriptResult(transcriptResult)) return;
 
@@ -1944,9 +1839,7 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
         networkIo: composeResult.networkIo === true,
       }, { now });
 
-      currentState = recordPioneroTtsPlan(currentState, {
-        text: currentState.llm?.lastPlannedResponse,
-      }, { now });
+      await synthesizeOrPlanTts(currentState.llm?.lastPlannedResponse);
 
       return;
     }
@@ -2028,9 +1921,7 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
             plannedResponse: obj(transcriptResult).plannedResponse,
           }, { now });
 
-          currentState = recordPioneroTtsPlan(currentState, {
-            text: currentState.llm?.lastPlannedResponse,
-          }, { now });
+          await synthesizeOrPlanTts(currentState.llm?.lastPlannedResponse);
         }
       } catch (err) {
         logger?.warn?.("pionero.livekit.agent_runner.stt_flush_failed", {
