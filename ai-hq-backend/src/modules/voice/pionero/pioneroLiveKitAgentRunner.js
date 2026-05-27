@@ -2387,7 +2387,10 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
 
     try {
       room = new RoomClass();
-      await room.connect(tokenResult.url, tokenResult.token);
+      attachRoomAudioIngestListeners(room);
+      await room.connect(tokenResult.url, tokenResult.token, {
+        autoSubscribe: true,
+      });
       connected = true;
 
       currentState = buildPioneroLiveKitAgentRunnerState({
@@ -2422,7 +2425,15 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
         });
       }
 
-      attachRoomAudioIngestListeners(room);
+      observeExistingRoomAudioPublications(room);
+
+      setTimeout(() => {
+        try {
+          observeExistingRoomAudioPublications(room);
+        } catch {
+          // Delayed existing audio scan is diagnostic-only.
+        }
+      }, 750)?.unref?.();
 
       return currentState;
     } catch (err) {
