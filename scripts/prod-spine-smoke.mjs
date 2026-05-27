@@ -75,6 +75,17 @@ function deriveRuntimeSignalsUrl(baseUrl = "") {
   return root ? `${root}/runtime-signals` : "";
 }
 
+export function derivePioneroRealtimeStatusUrl(baseUrl = "", roomName = "") {
+  const root = normalizeBaseUrl(baseUrl);
+  if (!root) return "";
+
+  const params = new URLSearchParams();
+  const safeRoomName = s(roomName, "pionero-browser-test");
+  if (safeRoomName) params.set("roomName", safeRoomName);
+
+  return `${root}/voice/pionero/livekit/agent/status?${params.toString()}`;
+}
+
 function deriveBuildcheckUrls(baseUrl = "") {
   const root = normalizeBaseUrl(baseUrl);
   return root ? [`${root}/api/__buildcheck`, `${root}/__buildcheck`] : [];
@@ -919,6 +930,9 @@ async function verifyWebsiteLane({
   domain,
   timeoutMs,
   requireWebsiteLane,
+  pioneroRealtimeRoomName,
+  requirePioneroRealtime,
+  checkPioneroRealtime,
 }) {
   if (!s(tenantKey)) {
     return [
@@ -1036,6 +1050,168 @@ export function downgradeWebsiteLaneToDiagnostic(results = [], reasonCode = "web
   });
 }
 
+
+export function summarizePioneroRealtimeStatus(json = {}) {
+  const data = obj(json?.data);
+  const result = obj(json?.result);
+  const payload = Object.keys(data).length
+    ? data
+    : Object.keys(result).length
+      ? result
+      : obj(json);
+  const readiness = obj(payload.realtimeReadiness);
+  const observed = obj(readiness.observed);
+  const blockers = Array.isArray(readiness.blockers) ? readiness.blockers : [];
+  const blockerReasonCodes = uniqStrings([
+    ...blockers.map((blocker) => blocker?.reasonCode),
+    ...(Array.isArray(readiness.blockerReasonCodes)
+      ? readiness.blockerReasonCodes
+      : []),
+  ]);
+
+  return {
+    readinessPresent: Object.keys(readiness).length > 0,
+    ok: readiness.ok === true,
+    readinessStatus: s(readiness.status).toLowerCase(),
+    roomName: s(payload.roomName || readiness.roomName),
+    mode: s(payload.mode || readiness.mode),
+    provider: s(payload.provider || readiness.provider),
+    realtimeStatus: s(payload.status || observed.realtimeStatus).toLowerCase(),
+    realtimeConnected:
+      payload.realtimeConnected === true || observed.realtimeConnected === true,
+    livekitAudioTrackPublished:
+      payload.livekitAudioTrackPublished === true ||
+      observed.livekitAudioTrackPublished === true,
+    firstAudioObserved: observed.firstAudioObserved === true,
+    firstAudioLatencyMs: n(
+      observed.firstAudioLatencyMs ?? payload.firstAudioLatencyMs
+    ),
+    interruptionsObserved: n(
+      observed.interruptionsObserved ?? payload.interruptionsObserved
+    ),
+    blockerReasonCodes,
+  };
+}
+
+export async function verifyPioneroRealtimeLane({
+  baseUrl,
+  internalToken,
+  roomName = "",
+  timeoutMs,
+  requirePioneroRealtime = false,
+  checkPioneroRealtime = false,
+}) {
+  if (!checkPioneroRealtime && !requirePioneroRealtime) {
+    return [
+      {
+        name: "pionero_realtime_prod_spine",
+        ok: true,
+        skipped: true,
+        reason: "PROD_SPINE_CHECK_PIONERO_REALTIME=0; Pionero realtime launch gate skipped",
+        details: {
+          requirePioneroRealtime,
+          reasonCode: "pionero_realtime_not_required_for_deploy_gate",
+        },
+      },
+    ];
+  }
+
+  const safeRoomName = s(roomName, "pionero-browser-test");
+  const url = derivePioneroRealtimeStatusUrl(baseUrl, safeRoomName);
+
+  if (!url) {
+    return [
+      buildResult(
+        "pionero_realtime_prod_spine",
+        !requirePioneroRealtime,
+        {
+          required: requirePioneroRealtime,
+          roomName: safeRoomName,
+          reasonCode: "pionero_realtime_status_url_missing",
+          message:
+            "AIHQ_BASE_URL is required to check Pionero realtime readiness.",
+        }
+      ),
+    ];
+  }
+
+  const response = await fetchJson(
+    url,
+    internalToken
+      ? buildInternalServiceHeaders({
+          internalToken,
+          audience: "aihq-backend.voice",
+        })
+      : {},
+    timeoutMs
+  );
+
+  if (!response.ok) {
+    return [
+      {
+        ...buildResult(
+          "pionero_realtime_prod_spine",
+          !requirePioneroRealtime,
+          {
+            url,
+            required: requirePioneroRealtime,
+            roomName: safeRoomName,
+            status: response.status,
+            reasonCode: s(
+              response.json?.reasonCode ||
+                response.json?.error ||
+                response.error ||
+                "pionero_realtime_status_unavailable"
+            ),
+            message: s(
+              response.json?.message ||
+                response.json?.error ||
+                response.error ||
+                "Pionero realtime status endpoint is unavailable."
+            ),
+          },
+          response.status
+        ),
+        warning: !requirePioneroRealtime,
+      },
+    ];
+  }
+
+  const summary = summarizePioneroRealtimeStatus(response.json || {});
+  const accepted = summary.readinessPresent && summary.ok;
+
+  return [
+    {
+      ...buildResult(
+        "pionero_realtime_prod_spine",
+        accepted || !requirePioneroRealtime,
+        {
+          url,
+          required: requirePioneroRealtime,
+          roomName: summary.roomName || safeRoomName,
+          mode: summary.mode,
+          provider: summary.provider,
+          realtimeStatus: summary.realtimeStatus,
+          readinessStatus: summary.readinessStatus,
+          realtimeConnected: summary.realtimeConnected,
+          livekitAudioTrackPublished: summary.livekitAudioTrackPublished,
+          firstAudioObserved: summary.firstAudioObserved,
+          firstAudioLatencyMs: summary.firstAudioLatencyMs,
+          interruptionsObserved: summary.interruptionsObserved,
+          blockerReasonCodes: summary.blockerReasonCodes,
+          reasonCode: accepted
+            ? ""
+            : summary.readinessPresent
+              ? "pionero_realtime_readiness_blocked"
+              : "pionero_realtime_readiness_missing",
+        },
+        response.status
+      ),
+      warning: !accepted && !requirePioneroRealtime,
+    },
+  ];
+}
+
 async function runAttempt({
   aihqBaseUrl,
   internalToken,
@@ -1052,6 +1228,9 @@ async function runAttempt({
   strictSidecars,
   failOnDegraded,
   requireWebsiteLane,
+  pioneroRealtimeRoomName,
+  requirePioneroRealtime,
+  checkPioneroRealtime,
 }) {
   const results = [];
 
@@ -1124,6 +1303,17 @@ async function runAttempt({
     });
   }
 
+  results.push(
+    ...(await verifyPioneroRealtimeLane({
+      baseUrl: aihqBaseUrl,
+      internalToken,
+      roomName: pioneroRealtimeRoomName,
+      timeoutMs,
+      requirePioneroRealtime,
+      checkPioneroRealtime,
+    }))
+  );
+
   const metaResults = await verifySidecar(
     "meta_bot",
     metaBaseUrl,
@@ -1171,6 +1361,18 @@ async function main() {
     false
   );
   const failOnDegraded = bool(process.env.PROD_SPINE_FAIL_ON_DEGRADED, true);
+  const pioneroRealtimeRoomName = s(
+    process.env.PIONERO_REALTIME_ROOM_NAME ||
+      process.env.PIONERO_ROOM_NAME ||
+      "pionero-browser-test"
+  );
+  const requirePioneroRealtime = bool(
+    process.env.PROD_SPINE_REQUIRE_PIONERO_REALTIME,
+    false
+  );
+  const checkPioneroRealtime =
+    requirePioneroRealtime ||
+    bool(process.env.PROD_SPINE_CHECK_PIONERO_REALTIME, false);
 
   printLine(
     "#",
@@ -1183,6 +1385,9 @@ async function main() {
       expectedReleaseShaConfigured: Boolean(expectedReleaseSha),
       requireBackendReleaseSha,
       requireWebsiteLane,
+      checkPioneroRealtime,
+      requirePioneroRealtime,
+      pioneroRealtimeRoomNameConfigured: Boolean(pioneroRealtimeRoomName),
       failOnDegraded,
       readinessPath: s(process.env.AIHQ_READINESS_PATH, "/readyz"),
       websiteLaneTenantKeyConfigured: Boolean(websiteLaneTenantKey),
@@ -1232,6 +1437,9 @@ async function main() {
       strictSidecars,
       failOnDegraded,
       requireWebsiteLane,
+      pioneroRealtimeRoomName,
+      requirePioneroRealtime,
+      checkPioneroRealtime,
     });
 
     lastFailed = renderSummary(lastResults);
