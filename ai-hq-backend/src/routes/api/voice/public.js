@@ -1,4 +1,4 @@
-﻿import {
+import {
   randomUUID } from "crypto";
 import express from "express";
 import { AccessToken } from "livekit-server-sdk";
@@ -67,6 +67,9 @@ import {
   getPioneroLiveKitAgentRuntimeState,
   startPioneroLiveKitAgentRuntime,
   stopPioneroLiveKitAgentRuntime,
+  getPioneroRealtimeAgentState,
+  startPioneroRealtimeAgent,
+  stopPioneroRealtimeAgent,
 } from "../../../modules/voice/index.js";
 import {
   createVoiceBusinessActionInboxSinkExecutor,
@@ -1940,6 +1943,7 @@ async function readPioneroLiveKitRouteRoomClient({
   roomName = "",
   logger = null,
   pioneroLiveKitRoomClassFactory = null,
+  pioneroRealtimeAgentRegistry = null,
 } = {}) {
   if (typeof pioneroLiveKitRoomClassFactory !== "function") {
       return {
@@ -2099,6 +2103,7 @@ async function handlePioneroLiveKitAgentStartPlan(
     dbDisabled = false,
     getRuntime = getTenantBrainRuntime,
     pioneroLiveKitRoomClassFactory = null,
+    pioneroRealtimeAgentRegistry = null,
   } = {}
 ) {
   const logger = getRouteLogger(req, "voice.pionero.livekit.agent.start_plan");
@@ -2112,6 +2117,24 @@ async function handlePioneroLiveKitAgentStartPlan(
       getRuntime,
       logger,
     });
+    const realtimeRegistry = pioneroRealtimeAgentRegistry || {
+      start: startPioneroRealtimeAgent,
+    };
+    const realtimeState = await realtimeRegistry?.start?.({
+      roomName,
+      logger,
+      runtimeApplied: brainInput.runtimeApplied === true,
+      runtimeConfig: brainInput.voiceRuntimeConfig,
+    });
+
+    if (realtimeState?.enabled === true) {
+      return ok(res, toPioneroJsonSafe({
+        ...realtimeState,
+        lane: "pionero_realtime",
+        transport: "livekit_audio_track",
+      }));
+    }
+
     const {
       RoomClass,
       RoomEvent,
@@ -2225,11 +2248,30 @@ function isPioneroRawPcmAudio(audio = {}) {
   );
 }
 
-async function handlePioneroLiveKitAgentStatus(req, res) {
+async function handlePioneroLiveKitAgentStatus(
+  req,
+  res,
+  {
+    pioneroRealtimeAgentRegistry = null,
+  } = {}
+) {
   const logger = getRouteLogger(req, "voice.pionero.livekit.agent.status");
 
   try {
     const roomName = req.query?.roomName || req.body?.roomName;
+    const realtimeRegistry = pioneroRealtimeAgentRegistry || {
+      getState: getPioneroRealtimeAgentState,
+    };
+    const realtimeState = realtimeRegistry?.getState?.({ roomName });
+
+    if (realtimeState) {
+      return ok(res, toPioneroJsonSafe({
+        ...realtimeState,
+        lane: "pionero_realtime",
+        transport: "livekit_audio_track",
+      }));
+    }
+
     const state = getPioneroLiveKitAgentRuntimeState({ roomName });
 
     if (!state) {
@@ -2299,11 +2341,30 @@ async function handlePioneroLiveKitAgentAudio(req, res) {
   }
 }
 
-async function handlePioneroLiveKitAgentStopPlan(req, res) {
+async function handlePioneroLiveKitAgentStopPlan(
+  req,
+  res,
+  {
+    pioneroRealtimeAgentRegistry = null,
+  } = {}
+) {
   const logger = getRouteLogger(req, "voice.pionero.livekit.agent.stop_plan");
 
   try {
     const roomName = req.body?.roomName || req.query?.roomName;
+    const realtimeRegistry = pioneroRealtimeAgentRegistry || {
+      stop: stopPioneroRealtimeAgent,
+    };
+    const realtimeState = await realtimeRegistry?.stop?.({ roomName });
+
+    if (realtimeState) {
+      return ok(res, toPioneroJsonSafe({
+        ...realtimeState,
+        lane: "pionero_realtime",
+        transport: "livekit_audio_track",
+      }));
+    }
+
     const state = await stopPioneroLiveKitAgentRuntime({ roomName });
 
     if (!state) {
@@ -2693,6 +2754,7 @@ export function voiceRoutes({
   startSidebandRunner = startRealtimeSidebandSocketRunner,
   speechGatewayFactory = createVoiceSpeechGateway,
   pioneroLiveKitRoomClassFactory = null,
+  pioneroRealtimeAgentRegistry = null,
 } = {}) {
   const r = express.Router();
 
@@ -2715,11 +2777,14 @@ export function voiceRoutes({
       dbDisabled,
       getRuntime,
       pioneroLiveKitRoomClassFactory,
+      pioneroRealtimeAgentRegistry,
     })
   );
 
   r.get("/voice/pionero/livekit/agent/status", requireOperatorSurfaceAccess, (req, res) =>
-    handlePioneroLiveKitAgentStatus(req, res)
+    handlePioneroLiveKitAgentStatus(req, res, {
+      pioneroRealtimeAgentRegistry,
+    })
   );
 
   r.get("/voice/pionero/livekit/agent/audio", requireOperatorSurfaceAccess, (req, res) =>
@@ -2727,7 +2792,9 @@ export function voiceRoutes({
   );
 
   r.post("/voice/pionero/livekit/agent/stop-plan", requireOperatorSurfaceAccess, (req, res) =>
-    handlePioneroLiveKitAgentStopPlan(req, res)
+    handlePioneroLiveKitAgentStopPlan(req, res, {
+      pioneroRealtimeAgentRegistry,
+    })
   );
 
   r.get("/settings/voice", requireOperatorSurfaceAccess, (req, res) =>
