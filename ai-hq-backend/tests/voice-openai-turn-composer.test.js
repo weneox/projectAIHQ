@@ -156,6 +156,50 @@ test("OpenAI turn composer builds Responses API request with developer and user 
   assertNoUnsafeLeak(result);
 });
 
+test("OpenAI turn composer uses supplied Pionero brain instructions", async () => {
+  let captured = null;
+  const env = {
+    OPENAI_API_KEY: "test-openai-key",
+    PIONERO_LIVEKIT_LLM_ENABLED: "1",
+  };
+  const instructions = [
+    "Voice assistant brain:",
+    "You are the live voice receptionist for Acme Baku Clinic.",
+    "Always reply in Azerbaijani unless the caller explicitly requests another language.",
+  ].join("\n");
+  const composer = createOpenAiTurnComposer({
+    env,
+    instructions,
+    brainMode: "canonical",
+    fetchImpl: async (_url, init) => {
+      captured = JSON.parse(init.body);
+      return {
+        ok: true,
+        async json() {
+          return {
+            output_text: "Buyurun.",
+          };
+        },
+      };
+    },
+  });
+
+  const result = await composer.composeTurn({
+    transcript: "Salam",
+  });
+
+  assert.equal(composer.brainMode, "canonical");
+  assert.equal(captured.input[0].role, "developer");
+  assert.equal(captured.input[0].content, instructions);
+  assert.match(
+    captured.input[0].content,
+    /Always reply in Azerbaijani unless the caller explicitly requests another language/
+  );
+  assert.equal(captured.input[1].content, "Salam");
+  assert.equal(result.ok, true);
+  assertNoUnsafeLeak(result);
+});
+
 test("OpenAI turn composer extracts output_text", () => {
   assert.equal(
     extractOpenAiResponseText({

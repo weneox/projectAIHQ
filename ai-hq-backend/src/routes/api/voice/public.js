@@ -1975,15 +1975,143 @@ async function readPioneroLiveKitRouteRoomClient({
     }
   }
 
+function readPioneroRouteContext(req = {}, scope = {}) {
+  return {
+    tenantContext: {
+      tenantId: s(
+        scope.tenantId ||
+          req.auth?.tenantId ||
+          req.user?.tenantId ||
+          req.tenant?.id ||
+          req.tenantId
+      ),
+      tenantKey: s(
+        scope.tenantKey ||
+          req.auth?.tenantKey ||
+          req.user?.tenantKey ||
+          req.tenant?.tenant_key ||
+          req.tenant?.key ||
+          req.tenantKey
+      ),
+    },
+    workspaceContext: {
+      workspaceId: s(
+        req.auth?.workspaceId ||
+          req.user?.workspaceId ||
+          req.workspace?.id ||
+          req.workspaceId ||
+          req.body?.workspaceId ||
+          req.query?.workspaceId
+      ),
+      workspaceKey: s(
+        req.auth?.workspaceKey ||
+          req.user?.workspaceKey ||
+          req.workspace?.workspace_key ||
+          req.workspace?.key ||
+          req.workspaceKey ||
+          req.body?.workspaceKey ||
+          req.query?.workspaceKey
+      ),
+    },
+  };
+}
+
+async function resolvePioneroLiveKitBrainInput({
+  req,
+  db,
+  dbDisabled = false,
+  getRuntime = getTenantBrainRuntime,
+  logger = null,
+} = {}) {
+  let scope = {};
+
+  if (!dbDisabled && db) {
+    try {
+      scope = await resolveTenantScope(req, db);
+    } catch (err) {
+      logger?.warn?.("voice.pionero.livekit.agent.runtime_scope_unavailable", {
+        reasonCode: "pionero_runtime_scope_unavailable",
+        error: s(err?.message || err),
+      });
+    }
+  }
+
+  const routeContext = readPioneroRouteContext(req, scope);
+
+  if (dbDisabled || !db || !routeContext.tenantContext.tenantKey) {
+    return {
+      ...routeContext,
+      runtimeApplied: false,
+      voiceRuntimeConfig: {},
+    };
+  }
+
+  try {
+    const runtimeResult = await processVoiceTenantConfig({
+      db,
+      tenantKey: routeContext.tenantContext.tenantKey,
+      toNumber: s(
+        req.body?.toNumber ||
+          req.query?.toNumber ||
+          req.body?.roomName ||
+          req.query?.roomName ||
+          "pionero-livekit"
+      ),
+      provider: "browser",
+      getRuntime,
+    });
+
+    if (runtimeResult?.ok === true) {
+      return {
+        ...routeContext,
+        runtimeApplied: true,
+        voiceRuntimeConfig: readBrowserVoiceConfigPayload(runtimeResult),
+      };
+    }
+
+    logger?.warn?.("voice.pionero.livekit.agent.runtime_unavailable", {
+      reasonCode: s(
+        runtimeResult?.error ||
+          runtimeResult?.details?.reasonCode ||
+          "pionero_runtime_unavailable"
+      ),
+      statusCode: Number(runtimeResult?.statusCode || 0),
+    });
+  } catch (err) {
+    logger?.warn?.("voice.pionero.livekit.agent.runtime_resolution_failed", {
+      reasonCode: "pionero_runtime_resolution_failed",
+      error: s(err?.message || err),
+    });
+  }
+
+  return {
+    ...routeContext,
+    runtimeApplied: false,
+    voiceRuntimeConfig: {},
+  };
+}
+
 async function handlePioneroLiveKitAgentStartPlan(
   req,
   res,
-  { pioneroLiveKitRoomClassFactory = null } = {}
+  {
+    db,
+    dbDisabled = false,
+    getRuntime = getTenantBrainRuntime,
+    pioneroLiveKitRoomClassFactory = null,
+  } = {}
 ) {
   const logger = getRouteLogger(req, "voice.pionero.livekit.agent.start_plan");
 
   try {
     const roomName = req.body?.roomName || req.query?.roomName;
+    const brainInput = await resolvePioneroLiveKitBrainInput({
+      req,
+      db,
+      dbDisabled,
+      getRuntime,
+      logger,
+    });
     const {
       RoomClass,
       RoomEvent,
@@ -2004,6 +2132,8 @@ async function handlePioneroLiveKitAgentStartPlan(
       ...(AudioStream ? { AudioStream } : {}),
       ...(TrackKind ? { TrackKind } : {}),
       ...(TrackSource ? { TrackSource } : {}),
+      runtimeApplied: brainInput.runtimeApplied === true,
+      voiceRuntimeConfig: brainInput.voiceRuntimeConfig,
     });
 
     return ok(res, toPioneroJsonSafe(state));
@@ -2581,6 +2711,9 @@ export function voiceRoutes({
 
   r.post("/voice/pionero/livekit/agent/start-plan", requireOperatorSurfaceAccess, (req, res) =>
     handlePioneroLiveKitAgentStartPlan(req, res, {
+      db,
+      dbDisabled,
+      getRuntime,
       pioneroLiveKitRoomClassFactory,
     })
   );

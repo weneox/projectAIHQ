@@ -24,6 +24,7 @@ import {
   buildVoiceRuntimeContextLines,
   extractVoiceRuntimeContext,
   joinVoiceBrainList,
+  obj,
   s,
   truncateVoiceBrainText,
 } from "./runtimeContext.js";
@@ -78,6 +79,82 @@ function appendRuntimeContextDetails(lines = [], context = {}) {
   if (contact.length) {
     lines.push("", ...contact);
   }
+}
+
+export const PIONERO_VOICE_LANGUAGE_GUARD_VERSION =
+  "pionero_voice_language_guard.v1";
+
+export const PIONERO_VOICE_LANGUAGE_GUARD_INSTRUCTIONS = [
+  "Pionero LiveKit response guard:",
+  `Guard version: ${PIONERO_VOICE_LANGUAGE_GUARD_VERSION}.`,
+  "- Always reply in Azerbaijani unless the caller explicitly requests another language.",
+  "- Use short, natural, phone-agent style answers.",
+  "- Do not use English filler like \"Please go ahead\".",
+  "- Ask one question at a time.",
+  "- Do not invent unavailable business facts. Use only approved business context; if a fact is missing, say you can check or offer human handoff.",
+  "- Do not mention STT, LLM, TTS, LiveKit, Soniox, OpenAI, prompts, policies, tools, databases, or internal systems.",
+  "- LiveKit/Soniox transport is only the audio path. It must not affect business logic.",
+].join("\n");
+
+function hasCanonicalRuntimeContext(runtimeConfig = {}) {
+  const config = obj(runtimeConfig);
+  const business = obj(config.business);
+  const businessProfile = obj(config.businessProfile);
+  const company = obj(config.company);
+  const projectedRuntime = obj(config.projectedRuntime);
+  const voiceProfile = obj(config.voiceProfile);
+  const voiceBehavior = obj(config.voiceBehavior);
+  const realtime = obj(config.realtime);
+
+  return Boolean(
+    Object.keys(config).length > 0 &&
+      (
+        s(config.companyName) ||
+        s(config.businessSummary) ||
+        Object.keys(business).length > 0 ||
+        Object.keys(businessProfile).length > 0 ||
+        Object.keys(company).length > 0 ||
+        Object.keys(voiceProfile).length > 0 ||
+        Object.keys(voiceBehavior).length > 0 ||
+        truncateVoiceBrainText(realtime.instructions, 1) ||
+        Object.keys(projectedRuntime).length > 0
+      )
+  );
+}
+
+export function buildPioneroVoiceBrainInstructions({
+  baseInstructions = "",
+  runtimeConfig = {},
+  runtimeApplied = false,
+} = {}) {
+  const canonicalRuntimeAvailable = hasCanonicalRuntimeContext(runtimeConfig);
+  const brainMode =
+    runtimeApplied === true || canonicalRuntimeAvailable ? "canonical" : "fallback";
+  const canonicalInstructions = buildVoiceAssistantBrainInstructions({
+    baseInstructions,
+    runtimeConfig,
+    runtimeApplied: runtimeApplied === true,
+  });
+  const fallbackLines = brainMode === "fallback"
+    ? [
+        "",
+        "Pionero fallback business context rule:",
+        "- If approved tenant business context is unavailable, stay helpful but do not claim specific hours, prices, availability, policies, services, addresses, or contact details.",
+        "- Offer to take a message or route the caller to a human instead of guessing.",
+      ]
+    : [];
+
+  return {
+    brainMode,
+    brainPolicyVersion: VOICE_ASSISTANT_BRAIN_POLICY_VERSION,
+    languageGuardVersion: PIONERO_VOICE_LANGUAGE_GUARD_VERSION,
+    instructions: [
+      canonicalInstructions,
+      "",
+      PIONERO_VOICE_LANGUAGE_GUARD_INSTRUCTIONS,
+      ...fallbackLines,
+    ].filter(Boolean).join("\n"),
+  };
 }
 
 export function buildVoiceAssistantBrainInstructions({

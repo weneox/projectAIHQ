@@ -4,8 +4,15 @@ import {
 } from "./openaiLlmRuntimeConfig.js";
 
 export const OPENAI_TURN_COMPOSER_VERSION = "openai_turn_composer.v1";
-export const PIONERO_OPENAI_DEVELOPER_MESSAGE =
-  "You are Pionero, a concise professional voice receptionist. Reply naturally in the same language as the caller. Keep answers short, helpful, and speakable. Do not mention internal systems.";
+export const PIONERO_OPENAI_DEVELOPER_MESSAGE = [
+  "You are Pionero, a concise professional voice receptionist.",
+  "Always reply in Azerbaijani unless the caller explicitly requests another language.",
+  "Use short, natural, phone-agent style answers.",
+  "Do not use English filler like \"Please go ahead\".",
+  "Ask one question at a time.",
+  "Do not invent unavailable business facts.",
+  "Do not mention internal systems.",
+].join("\n");
 const UNSAFE_ERROR_TEXT_PATTERNS = [
   "token",
   "secret",
@@ -64,9 +71,14 @@ function sanitizeErrorMessage(value, secrets = []) {
     .replace(/OPENAI_API_KEY=[^\s"]+/gi, "OPENAI_API_KEY=[redacted]");
 }
 
+function readDeveloperInstructions(value = "") {
+  return s(value, PIONERO_OPENAI_DEVELOPER_MESSAGE).slice(0, 16_000);
+}
+
 export function buildOpenAiTurnComposerRequest({
   model,
   transcript,
+  instructions = "",
   maxOutputTokens = 120,
   temperature = null,
 } = {}) {
@@ -75,7 +87,7 @@ export function buildOpenAiTurnComposerRequest({
     input: [
       {
         role: "developer",
-        content: PIONERO_OPENAI_DEVELOPER_MESSAGE,
+        content: readDeveloperInstructions(instructions),
       },
       {
         role: "user",
@@ -124,15 +136,21 @@ export function extractOpenAiResponseText(response = {}) {
 export function createOpenAiTurnComposer({
   env = process.env,
   fetchImpl = globalThis.fetch,
+  instructions = "",
+  brainMode = "",
   now = () => new Date().toISOString(),
   runtimeConfig = null,
 } = {}) {
   const config = runtimeConfig || readOpenAiLlmRuntimeConfig({ env });
   const apiKey = readOpenAiApiKey({ env });
+  const developerInstructions = readDeveloperInstructions(instructions);
 
   return {
     version: OPENAI_TURN_COMPOSER_VERSION,
     provider: "openai",
+    brainMode: ["canonical", "fallback"].includes(s(brainMode))
+      ? s(brainMode)
+      : "",
     configured: config.configured === true,
     enabled: config.enabled === true,
     config,
@@ -187,6 +205,7 @@ export function createOpenAiTurnComposer({
       const requestBody = buildOpenAiTurnComposerRequest({
         model: config.model,
         transcript: inputTranscript,
+        instructions: developerInstructions,
         maxOutputTokens: config.maxOutputTokens,
         temperature: config.temperature,
       });

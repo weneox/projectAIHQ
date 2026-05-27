@@ -15,6 +15,9 @@ import {
 import {
   createOpenAiTurnComposer,
 } from "../llm/providers/openaiTurnComposer.js";
+import {
+  buildPioneroVoiceBrainInstructions,
+} from "../brain/index.js";
 import { s } from "../shared.js";
 
 export const PIONERO_LIVEKIT_AGENT_RUNNER_VERSION = "pionero_livekit_agent_runner.v1";
@@ -1403,6 +1406,10 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
     roomName = "",
     speechGatewayFactory = null,
     trackAudioEventNames = [],
+    runtimeApplied = false,
+    runtimeConfig = null,
+    voiceRuntimeApplied = false,
+    voiceRuntimeConfig = null,
   } = input;
   const AudioStreamCtor = AudioStreamClass || AudioStream;
   const diagnosticOptions = {
@@ -1427,6 +1434,11 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
     DEFAULT_STT_FLUSH_FRAMES,
     { min: 1, max: 120 }
   );
+  const brainRuntimeConfig = obj(voiceRuntimeConfig || runtimeConfig);
+  const pioneroBrain = buildPioneroVoiceBrainInstructions({
+    runtimeConfig: brainRuntimeConfig,
+    runtimeApplied: voiceRuntimeApplied === true || runtimeApplied === true,
+  });
 
   let room = null;
   let connected = false;
@@ -1632,9 +1644,16 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
             logger,
             now,
             roomName,
+            brainInstructions: pioneroBrain.instructions,
+            brainMode: pioneroBrain.brainMode,
+            brainPolicyVersion: pioneroBrain.brainPolicyVersion,
+            languageGuardVersion: pioneroBrain.languageGuardVersion,
+            runtimeApplied: voiceRuntimeApplied === true || runtimeApplied === true,
           })
         : createOpenAiTurnComposer({
             env,
+            brainMode: pioneroBrain.brainMode,
+            instructions: pioneroBrain.instructions,
             now,
           });
       const reasonCode = s(
