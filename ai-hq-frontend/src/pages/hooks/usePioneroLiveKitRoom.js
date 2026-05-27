@@ -139,6 +139,15 @@ function buildAgentAudioBlob(payload = {}) {
   const normalizedContentType = contentType.toLowerCase();
 
   if (
+    normalizedContentType.includes("wav") ||
+    normalizedContentType.includes("wave")
+  ) {
+    return new Blob([bytes], {
+      type: "audio/wav",
+    });
+  }
+
+  if (
     audioFormat.includes("pcm_s16le") ||
     normalizedContentType.includes("pcm")
   ) {

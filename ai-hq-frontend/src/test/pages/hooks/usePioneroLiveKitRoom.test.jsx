@@ -1,4 +1,4 @@
-import { act, renderHook } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockLiveKit = vi.hoisted(() => {
@@ -680,6 +680,125 @@ describe("usePioneroLiveKitRoom", () => {
     expect(result.current.agentNetworkIo).toBe(true);
     expect(result.current.agentReady).toBe(true);
     expect(result.current.agentAudioIngestStatus).toBe("waiting_for_audio");
+  });
+
+  it("plays newly synthesized agent audio using the returned WAV content type", async () => {
+    const originalCreateObjectURL = window.URL.createObjectURL;
+    const originalRevokeObjectURL = window.URL.revokeObjectURL;
+    const createdBlobs = [];
+    const createObjectURL = vi.fn((blob) => {
+      createdBlobs.push(blob);
+      return "blob:pionero-agent-audio";
+    });
+    const revokeObjectURL = vi.fn();
+    const play = vi.fn().mockResolvedValue(undefined);
+    const pause = vi.fn();
+    const AudioMock = vi.fn(function MockAudio() {
+      return {
+        onended: null,
+        onerror: null,
+        pause,
+        play,
+        preload: "",
+        src: "",
+      };
+    });
+
+    window.URL.createObjectURL = createObjectURL;
+    window.URL.revokeObjectURL = revokeObjectURL;
+    vi.stubGlobal("Audio", AudioMock);
+
+    try {
+      const createPioneroLiveKitSession = vi
+        .fn()
+        .mockResolvedValue(buildSession());
+      const startPioneroLiveKitAgentPlan = vi
+        .fn()
+        .mockResolvedValue(buildAgentPlan());
+      const getPioneroLiveKitAgentStatus = vi.fn().mockResolvedValue(
+        buildAgentPlan({
+          status: "connected",
+          tts: {
+            provider: "soniox",
+            enabled: true,
+            status: "speech_synthesized",
+            speechPlansCreated: 1,
+            synthesesAttempted: 1,
+            synthesesSucceeded: 1,
+            synthesesFailed: 0,
+            audioByteLength: 12,
+            audioChunkCount: 1,
+            lastInputText: "Salam",
+            lastAudioPlan: "soniox_tts_audio_ready",
+            lastObservedAt: "2026-01-02T03:04:08.000Z",
+            reasonCode: "",
+            networkIo: true,
+          },
+        })
+      );
+      const audioBase64 = window.btoa("RIFFxxxxWAVE");
+      const getPioneroLiveKitAgentAudio = vi.fn().mockResolvedValue({
+        ok: true,
+        audioId: "agent-audio-1",
+        audioBase64,
+        audioByteLength: 12,
+        audioChunkCount: 1,
+        mimeType: "audio/wav",
+        contentType: "audio/wav",
+        audioFormat: "wav",
+        sampleRateHz: 24000,
+        synthesizedAt: "2026-01-02T03:04:08.000Z",
+      });
+      mockLiveKit.createLocalAudioTrack.mockResolvedValue({ stop: vi.fn() });
+
+      const { result } = renderHook(() =>
+        usePioneroLiveKitRoom({
+          createPioneroLiveKitSession,
+          getPioneroLiveKitAgentAudio,
+          getPioneroLiveKitAgentStatus,
+          startPioneroLiveKitAgentPlan,
+        })
+      );
+
+      await act(async () => {
+        await result.current.connect();
+      });
+
+      await act(async () => {
+        await result.current.refreshAgentStatus();
+      });
+
+      await waitFor(() => {
+        expect(getPioneroLiveKitAgentAudio).toHaveBeenCalledWith({
+          roomName: "pionero-browser-test",
+        });
+      });
+      await waitFor(() => expect(play).toHaveBeenCalledTimes(1));
+
+      expect(createObjectURL).toHaveBeenCalledTimes(1);
+      expect(createdBlobs[0]).toBeInstanceOf(Blob);
+      expect(createdBlobs[0].type).toBe("audio/wav");
+      await expect(createdBlobs[0].text()).resolves.toBe("RIFFxxxxWAVE");
+      expect(result.current.agentAudioPlaybackStatus).toBe("playing");
+      expect(result.current.agentAudioPlaybackAudioId).toBe("agent-audio-1");
+      expect(result.current.agentAudioPlaybackByteLength).toBe(12);
+      expect(JSON.stringify(result.current)).not.toContain("audioBase64");
+      expect(JSON.stringify(result.current)).not.toContain(audioBase64);
+    } finally {
+      if (originalCreateObjectURL) {
+        window.URL.createObjectURL = originalCreateObjectURL;
+      } else {
+        delete window.URL.createObjectURL;
+      }
+
+      if (originalRevokeObjectURL) {
+        window.URL.revokeObjectURL = originalRevokeObjectURL;
+      } else {
+        delete window.URL.revokeObjectURL;
+      }
+
+      vi.unstubAllGlobals();
+    }
   });
 
   it("keeps the browser room live when the agent start-plan fails", async () => {

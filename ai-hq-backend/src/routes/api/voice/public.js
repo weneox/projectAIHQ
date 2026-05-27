@@ -2055,6 +2055,46 @@ function toPioneroJsonSafe(value, seen = new WeakSet()) {
 
   return value;
 }
+
+function buildPioneroPcm16WavBuffer(audioBuffer, { sampleRateHz = 24000 } = {}) {
+  const pcmBuffer = Buffer.isBuffer(audioBuffer)
+    ? audioBuffer
+    : Buffer.from(audioBuffer || []);
+  const sampleRate = n(sampleRateHz, 24000) || 24000;
+  const channelCount = 1;
+  const bitsPerSample = 16;
+  const blockAlign = channelCount * (bitsPerSample / 8);
+  const byteRate = sampleRate * blockAlign;
+  const header = Buffer.alloc(44);
+
+  header.write("RIFF", 0, "ascii");
+  header.writeUInt32LE(36 + pcmBuffer.byteLength, 4);
+  header.write("WAVE", 8, "ascii");
+  header.write("fmt ", 12, "ascii");
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);
+  header.writeUInt16LE(channelCount, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(byteRate, 28);
+  header.writeUInt16LE(blockAlign, 32);
+  header.writeUInt16LE(bitsPerSample, 34);
+  header.write("data", 36, "ascii");
+  header.writeUInt32LE(pcmBuffer.byteLength, 40);
+
+  return Buffer.concat([header, pcmBuffer]);
+}
+
+function isPioneroRawPcmAudio(audio = {}) {
+  const audioFormat = s(audio.audioFormat).toLowerCase();
+  const contentType = s(audio.mimeType || audio.contentType).toLowerCase();
+
+  return (
+    audioFormat.includes("pcm_s16le") ||
+    audioFormat.includes("pcm") ||
+    contentType.includes("pcm")
+  );
+}
+
 async function handlePioneroLiveKitAgentStatus(req, res) {
   const logger = getRouteLogger(req, "voice.pionero.livekit.agent.status");
 
@@ -2096,15 +2136,24 @@ async function handlePioneroLiveKitAgentAudio(req, res) {
       });
     }
 
+    const responseAudio = isPioneroRawPcmAudio(audio)
+      ? buildPioneroPcm16WavBuffer(audio.audio, {
+          sampleRateHz: audio.sampleRateHz,
+        })
+      : audio.audio;
+    const mimeType = isPioneroRawPcmAudio(audio)
+      ? "audio/wav"
+      : s(audio.mimeType || audio.contentType, "audio/wav");
+
     return ok(res, {
       audioId: s(audio.audioId),
       roomName: s(audio.roomName),
-      audioBase64: audio.audio.toString("base64"),
-      audioByteLength: n(audio.audioByteLength),
+      audioBase64: responseAudio.toString("base64"),
+      audioByteLength: n(responseAudio.byteLength),
       audioChunkCount: n(audio.audioChunkCount),
-      mimeType: s(audio.mimeType || audio.contentType),
-      contentType: s(audio.contentType || audio.mimeType),
-      audioFormat: s(audio.audioFormat),
+      mimeType,
+      contentType: mimeType,
+      audioFormat: mimeType === "audio/wav" ? "wav" : s(audio.audioFormat),
       sampleRateHz: n(audio.sampleRateHz),
       synthesizedAt: s(audio.synthesizedAt),
     });
