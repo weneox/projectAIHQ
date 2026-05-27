@@ -632,6 +632,36 @@ export default function usePioneroLiveKitRoom({
       const nextRoomName = s(safeSession?.roomName || PIONERO_LIVEKIT_ROOM_NAME);
       const nextIdentity = s(safeSession?.identity);
       runtimeRoomNameRef.current = nextRoomName;
+
+      const preStartMonitorOnlyMode = readPioneroMonitorOnlyMode();
+
+      if (mountedRef.current) {
+        setMonitorOnlyMode(preStartMonitorOnlyMode);
+      }
+
+      if (!preStartMonitorOnlyMode) {
+        try {
+          shouldStopAgentRuntimeRef.current = true;
+          const agentPlan = await startPioneroLiveKitAgentPlan({
+            roomName: nextRoomName,
+          });
+          setSafeAgentState(readAgentState(agentPlan));
+        } catch (agentErr) {
+          setSafeAgentState({
+            agentStatus: "warning",
+            agentReasonCode: readErrorMessage(
+              agentErr,
+              "pionero_agent_prestart_failed",
+              [sensitiveToken]
+            ),
+            agentNetworkIo: false,
+            agentReady: false,
+            agentAudioIngestStatus: "error",
+            agentAudioReasonCode: "pionero_agent_prestart_failed",
+          });
+        }
+      }
+
       const nextRoom = new Room();
       const handleParticipantChanged = () => setSafeParticipants(nextRoom);
 
