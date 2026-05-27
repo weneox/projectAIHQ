@@ -97,6 +97,7 @@ export default function BrowserVoiceCall() {
     participants: pioneroLiveKitParticipants = [],
     connect: connectPioneroLiveKit,
     disconnect: disconnectPioneroLiveKit,
+    playLatestAgentAudio: playLatestPioneroAgentAudio,
     refreshAgentStatus: refreshPioneroLiveKitAgentStatus,
     localMicEnabled: pioneroLiveKitLocalMicEnabled,
     monitorOnlyMode: pioneroLiveKitMonitorOnlyMode,
@@ -131,10 +132,17 @@ export default function BrowserVoiceCall() {
     agentTtsEnabled: pioneroLiveKitAgentTtsEnabled,
     agentTtsNetworkIo: pioneroLiveKitAgentTtsNetworkIo,
     agentTtsSpeechPlansCreated: pioneroLiveKitAgentTtsSpeechPlansCreated,
+    agentTtsSynthesesSucceeded: pioneroLiveKitAgentTtsSynthesesSucceeded,
+    agentTtsAudioByteLength: pioneroLiveKitAgentTtsAudioByteLength,
+    agentTtsAudioChunkCount: pioneroLiveKitAgentTtsAudioChunkCount,
     agentTtsLastInputText: pioneroLiveKitAgentTtsLastInputText,
     agentTtsLastAudioPlan: pioneroLiveKitAgentTtsLastAudioPlan,
     agentTtsLastObservedAt: pioneroLiveKitAgentTtsLastObservedAt,
     agentTtsReasonCode: pioneroLiveKitAgentTtsReasonCode,
+    agentAudioPlaybackStatus: pioneroLiveKitAgentAudioPlaybackStatus,
+    agentAudioPlaybackReasonCode: pioneroLiveKitAgentAudioPlaybackReasonCode,
+    agentAudioPlaybackByteLength: pioneroLiveKitAgentAudioPlaybackByteLength,
+    agentAudioPlaybackSynthesizedAt: pioneroLiveKitAgentAudioPlaybackSynthesizedAt,
   } = usePioneroLiveKitRoom();
 
   const [speechBridgeDraftText, setSpeechBridgeDraftText] = useState("");
@@ -267,6 +275,9 @@ export default function BrowserVoiceCall() {
   const pioneroLiveKitAgentTtsNetworkIoLabel = pioneroLiveKitAgentTtsNetworkIo
     ? "yes"
     : "no";
+  const pioneroLiveKitAgentTtsAudioLabel = pioneroLiveKitAgentTtsAudioByteLength > 0
+    ? `${pioneroLiveKitAgentTtsAudioByteLength} bytes / ${pioneroLiveKitAgentTtsAudioChunkCount} chunks`
+    : "not synthesized";
   const pioneroLiveKitAgentTtsLastInputTextLabel = s(
     pioneroLiveKitAgentTtsLastInputText,
     "not planned"
@@ -279,6 +290,23 @@ export default function BrowserVoiceCall() {
     pioneroLiveKitAgentTtsLastObservedAt,
     "not observed"
   );
+  const pioneroLiveKitAgentAudioPlaybackLabel = s(
+    pioneroLiveKitAgentAudioPlaybackStatus,
+    "idle"
+  );
+  const pioneroLiveKitAgentAudioPlaybackDetail = s(
+    pioneroLiveKitAgentAudioPlaybackReasonCode ||
+      pioneroLiveKitAgentAudioPlaybackSynthesizedAt,
+    "not played"
+  );
+  const pioneroLiveKitAgentAudioPlaybackBytesLabel =
+    pioneroLiveKitAgentAudioPlaybackByteLength > 0
+      ? `${pioneroLiveKitAgentAudioPlaybackByteLength} bytes`
+      : "";
+  const pioneroLiveKitShowAgentAudioPlayButton = [
+    "blocked",
+    "error",
+  ].includes(pioneroLiveKitAgentAudioPlaybackStatus);
 
   const refreshSpeechReadiness = useCallback(async () => {
     setSpeechReadinessStatus("loading");
@@ -347,6 +375,10 @@ export default function BrowserVoiceCall() {
       setPioneroAgentRefreshStatus("error");
     }
   }, [refreshPioneroLiveKitAgentStatus]);
+
+  const handlePlayLatestPioneroAgentAudio = useCallback(async () => {
+    await playLatestPioneroAgentAudio?.();
+  }, [playLatestPioneroAgentAudio]);
 
   const handleSpeakSpeechBridge = () => {
     speechBridge?.speakText?.(speechBridgeText);
@@ -823,6 +855,33 @@ export default function BrowserVoiceCall() {
           </div>
           <div className="rounded-2xl border border-line-soft bg-surface-subtle p-3">
             <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              Syntheses succeeded
+            </div>
+            <div className="mt-1 text-sm font-semibold text-text">
+              {pioneroLiveKitAgentTtsSynthesesSucceeded}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-line-soft bg-surface-subtle p-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              Synthesized audio
+            </div>
+            <div className="mt-1 text-sm font-semibold text-text">
+              {pioneroLiveKitAgentTtsAudioLabel}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-line-soft bg-surface-subtle p-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              Playback
+            </div>
+            <div className="mt-1 text-sm font-semibold text-text">
+              {pioneroLiveKitAgentAudioPlaybackLabel}
+            </div>
+            <div className="mt-1 break-words text-xs text-text-muted">
+              {pioneroLiveKitAgentAudioPlaybackBytesLabel || pioneroLiveKitAgentAudioPlaybackDetail}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-line-soft bg-surface-subtle p-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
               Last input text
             </div>
             <div className="mt-1 break-words text-sm font-semibold text-text">
@@ -882,6 +941,16 @@ export default function BrowserVoiceCall() {
           >
             Refresh Pionero status
           </Button>
+
+          {pioneroLiveKitShowAgentAudioPlayButton ? (
+            <Button
+              leftIcon={<Volume2 className="h-4 w-4" />}
+              disabled={!pioneroLiveKitRoomName}
+              onClick={handlePlayLatestPioneroAgentAudio}
+            >
+              Play agent audio
+            </Button>
+          ) : null}
         </div>
 
         {pioneroLiveKitError ? (

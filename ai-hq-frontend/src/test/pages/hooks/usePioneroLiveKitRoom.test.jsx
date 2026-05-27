@@ -124,6 +124,11 @@ function buildAgentPlan(overrides = {}) {
       enabled: false,
       status: "planned",
       speechPlansCreated: 0,
+      synthesesAttempted: 0,
+      synthesesSucceeded: 0,
+      synthesesFailed: 0,
+      audioByteLength: 0,
+      audioChunkCount: 0,
       lastInputText: "",
       lastAudioPlan: "",
       lastObservedAt: "",
@@ -241,8 +246,8 @@ describe("usePioneroLiveKitRoom", () => {
     expect(startPioneroLiveKitAgentPlan).toHaveBeenCalledWith({
       roomName: "pionero-browser-test",
     });
-    expect(room.connect.mock.invocationCallOrder[0]).toBeLessThan(
-      startPioneroLiveKitAgentPlan.mock.invocationCallOrder[0]
+    expect(startPioneroLiveKitAgentPlan.mock.invocationCallOrder[0]).toBeLessThan(
+      room.connect.mock.invocationCallOrder[0]
     );
     expect(mockLiveKit.createLocalAudioTrack).toHaveBeenCalledTimes(1);
     expect(room.localParticipant.publishTrack).toHaveBeenCalledWith(localMicTrack, {

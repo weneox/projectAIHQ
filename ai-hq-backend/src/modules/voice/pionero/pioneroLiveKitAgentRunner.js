@@ -5,6 +5,7 @@
 import {
   buildSonioxSpeechRuntimeConfig,
 } from "../speech/providers/sonioxSpeechRuntimeConfig.js";
+import { randomUUID } from "crypto";
 import {
   createSonioxSttSession,
 } from "../speech/providers/sonioxSttSession.js";
@@ -65,6 +66,9 @@ const DEFAULT_TRACK_AUDIO_EVENT_NAMES = [
 const DEFAULT_STT_MAX_FRAMES = 120;
 const DEFAULT_STT_FLUSH_MS = 2500;
 const DEFAULT_STT_FLUSH_FRAMES = 3;
+const DEFAULT_TTS_AUDIO_FORMAT = "pcm_s16le";
+const DEFAULT_TTS_SAMPLE_RATE_HZ = 24000;
+const DEFAULT_TTS_MIME_TYPE = "audio/pcm; codecs=pcm_s16le; rate=24000";
 const SAFE_DIAGNOSTIC_TEXT_MAX_LENGTH = 96;
 const UNSAFE_DIAGNOSTIC_TEXT_PATTERNS = [
   "token",
@@ -134,6 +138,44 @@ function readBoundedInteger(value, fallback, { min = 1, max = 60_000 } = {}) {
 
 function isEnabled(value = "") {
   return ["1", "true"].includes(s(value).toLowerCase());
+}
+
+function readTtsAudioBuffer(result = {}) {
+  const audio = result?.audio;
+
+  if (Buffer.isBuffer(audio)) {
+    return Buffer.from(audio);
+  }
+
+  if (ArrayBuffer.isView(audio)) {
+    return Buffer.from(audio.buffer, audio.byteOffset, audio.byteLength);
+  }
+
+  if (audio instanceof ArrayBuffer) {
+    return Buffer.from(audio);
+  }
+
+  const audioBase64 = s(result?.audioBase64);
+
+  if (audioBase64) {
+    try {
+      return Buffer.from(audioBase64, "base64");
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
+
+function readTtsAudioMimeType(result = {}) {
+  return s(
+    result?.mimeType ||
+      result?.contentType ||
+      result?.audioMimeType ||
+      result?.audioContentType,
+    DEFAULT_TTS_MIME_TYPE
+  );
 }
 
 function firstDefined(...values) {
@@ -1396,6 +1438,7 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
   let llmTurnComposerResolved = false;
   let ttsSession = null;
   let ttsSessionResolved = false;
+  let latestTtsAudio = null;
   let currentState = buildPioneroLiveKitAgentRunnerState({
     env,
     roomName,
@@ -1746,10 +1789,29 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
     }
 
     const currentTts = buildPioneroTtsState(currentState.tts);
-    const audioByteLength = n(result?.audioByteLength || result?.audio?.byteLength);
+    const audioBuffer = readTtsAudioBuffer(result);
+    const audioByteLength = n(result?.audioByteLength || audioBuffer?.byteLength);
     const audioChunkCount = n(result?.audioChunkCount);
 
-    if (result?.ok === true && audioByteLength > 0) {
+    if (result?.ok === true && audioBuffer && audioByteLength > 0) {
+      const synthesizedAt = s(result.synthesizedAt, readNowISOString(now));
+      const mimeType = readTtsAudioMimeType(result);
+      const sampleRateHz = n(result?.sampleRateHz, DEFAULT_TTS_SAMPLE_RATE_HZ);
+      const audioFormat = s(result?.audioFormat, DEFAULT_TTS_AUDIO_FORMAT);
+
+      latestTtsAudio = {
+        audio: audioBuffer,
+        audioId: s(result?.audioId, randomUUID()),
+        roomName: s(currentState.roomName || roomName),
+        audioByteLength,
+        audioChunkCount,
+        mimeType,
+        contentType: mimeType,
+        audioFormat,
+        sampleRateHz,
+        synthesizedAt,
+      };
+
       setTtsState({
         ...currentTts,
         provider: "soniox",
@@ -1760,7 +1822,7 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
         audioChunkCount,
         lastInputText: inputText,
         lastAudioPlan: "soniox_tts_audio_ready",
-        lastObservedAt: s(result.synthesizedAt, readNowISOString(now)),
+        lastObservedAt: synthesizedAt,
         reasonCode: "",
         networkIo: result.networkIo === true,
       });
@@ -2419,6 +2481,7 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
 
     room = null;
     connected = false;
+    latestTtsAudio = null;
     currentState = buildPioneroLiveKitAgentRunnerState({
       plan: currentState,
       status: "stopped",
@@ -2459,6 +2522,25 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
     return currentState;
   }
 
+  function getLatestTtsAudio() {
+    if (!latestTtsAudio?.audio || latestTtsAudio.audioByteLength <= 0) {
+      return null;
+    }
+
+    return {
+      audio: Buffer.from(latestTtsAudio.audio),
+      audioId: latestTtsAudio.audioId,
+      roomName: latestTtsAudio.roomName,
+      audioByteLength: latestTtsAudio.audioByteLength,
+      audioChunkCount: latestTtsAudio.audioChunkCount,
+      mimeType: latestTtsAudio.mimeType,
+      contentType: latestTtsAudio.contentType,
+      audioFormat: latestTtsAudio.audioFormat,
+      sampleRateHz: latestTtsAudio.sampleRateHz,
+      synthesizedAt: latestTtsAudio.synthesizedAt,
+    };
+  }
+
   function snapshotDiagnostics() {
     currentState = snapshotPioneroRoomParticipants(
       currentState,
@@ -2469,6 +2551,7 @@ export function createPioneroLiveKitAgentRunner(input = {}) {
   }
 
   return {
+    getLatestTtsAudio,
     getState,
     snapshotDiagnostics,
     start,

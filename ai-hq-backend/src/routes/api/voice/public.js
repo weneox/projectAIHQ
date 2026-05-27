@@ -63,6 +63,7 @@ import {
   createSonioxSpeechAdapter,
   buildPioneroLiveKitAgentPlan,
   buildPioneroVoiceReadinessSnapshot,
+  getPioneroLiveKitAgentRuntimeLatestTtsAudio,
   getPioneroLiveKitAgentRuntimeState,
   startPioneroLiveKitAgentRuntime,
   stopPioneroLiveKitAgentRuntime,
@@ -2081,6 +2082,44 @@ async function handlePioneroLiveKitAgentStatus(req, res) {
   }
 }
 
+async function handlePioneroLiveKitAgentAudio(req, res) {
+  const logger = getRouteLogger(req, "voice.pionero.livekit.agent.audio");
+
+  try {
+    const roomName = req.query?.roomName || req.body?.roomName;
+    const audio = getPioneroLiveKitAgentRuntimeLatestTtsAudio({ roomName });
+
+    if (!audio?.audio || audio.audioByteLength <= 0) {
+      return fail(res, 404, "pionero_agent_tts_audio_not_found", {
+        reasonCode: "pionero_agent_tts_audio_not_found",
+        roomName: s(roomName),
+      });
+    }
+
+    return ok(res, {
+      audioId: s(audio.audioId),
+      roomName: s(audio.roomName),
+      audioBase64: audio.audio.toString("base64"),
+      audioByteLength: n(audio.audioByteLength),
+      audioChunkCount: n(audio.audioChunkCount),
+      mimeType: s(audio.mimeType || audio.contentType),
+      contentType: s(audio.contentType || audio.mimeType),
+      audioFormat: s(audio.audioFormat),
+      sampleRateHz: n(audio.sampleRateHz),
+      synthesizedAt: s(audio.synthesizedAt),
+    });
+  } catch (err) {
+    logger.error("voice.pionero.livekit.agent.audio.failed", err);
+    recordVoiceRouteFailure({
+      route: "voice.pionero.livekit.agent.audio",
+      reasonCode: "pionero_livekit_agent_audio_failed",
+      err,
+      req,
+    });
+    return fail(res, 500, "pionero_livekit_agent_audio_failed");
+  }
+}
+
 async function handlePioneroLiveKitAgentStopPlan(req, res) {
   const logger = getRouteLogger(req, "voice.pionero.livekit.agent.stop_plan");
 
@@ -2499,6 +2538,10 @@ export function voiceRoutes({
 
   r.get("/voice/pionero/livekit/agent/status", requireOperatorSurfaceAccess, (req, res) =>
     handlePioneroLiveKitAgentStatus(req, res)
+  );
+
+  r.get("/voice/pionero/livekit/agent/audio", requireOperatorSurfaceAccess, (req, res) =>
+    handlePioneroLiveKitAgentAudio(req, res)
   );
 
   r.post("/voice/pionero/livekit/agent/stop-plan", requireOperatorSurfaceAccess, (req, res) =>

@@ -158,6 +158,10 @@ export async function getPioneroLiveKitAgentStatus(params = {}) {
   return apiGet(`/api/voice/pionero/livekit/agent/status${qs(params)}`);
 }
 
+export async function getPioneroLiveKitAgentAudio(params = {}) {
+  return apiGet(`/api/voice/pionero/livekit/agent/audio${qs(params)}`);
+}
+
 export async function stopPioneroLiveKitAgentPlan(body = {}) {
   return apiPost("/api/voice/pionero/livekit/agent/stop-plan", body);
 }

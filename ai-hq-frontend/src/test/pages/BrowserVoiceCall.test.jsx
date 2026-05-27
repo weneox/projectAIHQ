@@ -91,10 +91,18 @@ function buildPioneroHook(overrides = {}) {
     agentTtsEnabled: false,
     agentTtsNetworkIo: false,
     agentTtsSpeechPlansCreated: 0,
+    agentTtsSynthesesSucceeded: 0,
+    agentTtsAudioByteLength: 0,
+    agentTtsAudioChunkCount: 0,
     agentTtsLastInputText: "",
     agentTtsLastAudioPlan: "",
     agentTtsLastObservedAt: "",
     agentTtsReasonCode: "",
+    agentAudioPlaybackStatus: "idle",
+    agentAudioPlaybackReasonCode: "",
+    agentAudioPlaybackByteLength: 0,
+    agentAudioPlaybackSynthesizedAt: "",
+    playLatestAgentAudio: vi.fn(),
     ...overrides,
   };
 }
@@ -162,6 +170,9 @@ describe("BrowserVoiceCall", () => {
     expect(getByText("Last planned response")).toBeTruthy();
     expect(getByText("TTS skeleton")).toBeTruthy();
     expect(getByText("Speech plans created")).toBeTruthy();
+    expect(getByText("Syntheses succeeded")).toBeTruthy();
+    expect(getByText("Synthesized audio")).toBeTruthy();
+    expect(getByText("Playback")).toBeTruthy();
     expect(getByText("Last input text")).toBeTruthy();
     expect(getByText("Last audio plan")).toBeTruthy();
     expect(getByText("Speech Bridge / Soniox lane")).toBeTruthy();
@@ -224,6 +235,26 @@ describe("BrowserVoiceCall", () => {
     ).toBeTruthy();
     expect(getByText("monitor_only (not ready)")).toBeTruthy();
     expect(getByText("pionero_monitor_only_browser_publish")).toBeTruthy();
+  });
+
+  it("shows a Pionero agent audio fallback control when autoplay is blocked", () => {
+    const hook = buildHook();
+    const pioneroHook = buildPioneroHook({
+      roomName: "pionero-browser-test",
+      agentAudioPlaybackStatus: "blocked",
+      agentAudioPlaybackReasonCode: "pionero_agent_audio_autoplay_blocked",
+      agentTtsSynthesesSucceeded: 1,
+      agentTtsAudioByteLength: 16,
+      agentTtsAudioChunkCount: 1,
+    });
+    useBrowserVoiceCall.mockReturnValue(hook);
+    usePioneroLiveKitRoom.mockReturnValue(pioneroHook);
+
+    const { getAllByText, getByText } = render(<BrowserVoiceCall />);
+
+    expect(getAllByText("blocked").length).toBeGreaterThan(0);
+    fireEvent.click(getByText("Play agent audio"));
+    expect(pioneroHook.playLatestAgentAudio).toHaveBeenCalledTimes(1);
   });
 
   it("uses stop controls when voice lanes are active", () => {

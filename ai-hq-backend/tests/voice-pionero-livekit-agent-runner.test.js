@@ -15,6 +15,10 @@ import {
   snapshotPioneroRoomParticipants,
 } from "../src/modules/voice/pionero/pioneroLiveKitAgentRunner.js";
 import {
+  startPioneroLiveKitAgentRuntime,
+  stopPioneroLiveKitAgentRuntime,
+} from "../src/modules/voice/pionero/pioneroLiveKitAgentRuntime.js";
+import {
   voiceRoutes,
 } from "../src/routes/api/voice/public.js";
 
@@ -2156,6 +2160,18 @@ test("pionero LiveKit agent runner synthesizes Soniox TTS when gated TTS is enab
   assert.equal(state.tts.errorMessage, "");
   assert.equal(state.tts.networkIo, true);
   assert.equal(Object.hasOwn(state.tts, "audio"), false);
+  assert.equal(Object.hasOwn(state.tts, "audioBase64"), false);
+  const latestAudio = runner.getLatestTtsAudio();
+  assert.equal(latestAudio.audioId.length > 0, true);
+  assert.equal(latestAudio.roomName, "pionero-demo-room");
+  assert.equal(latestAudio.audio.toString("utf8"), "fake-audio-bytes");
+  assert.equal(latestAudio.audioByteLength, Buffer.byteLength("fake-audio-bytes"));
+  assert.equal(latestAudio.audioChunkCount, 1);
+  assert.equal(latestAudio.mimeType, "audio/pcm; codecs=pcm_s16le; rate=24000");
+  assert.equal(latestAudio.contentType, "audio/pcm; codecs=pcm_s16le; rate=24000");
+  assert.equal(latestAudio.audioFormat, "pcm_s16le");
+  assert.equal(latestAudio.sampleRateHz, 24000);
+  assert.equal(latestAudio.synthesizedAt, "2026-01-02T03:04:08.000Z");
   assertNoSecretLeak(state, "test-agent-token-secret");
   assertNoSecretLeak(state, "test-openai-token-secret");
   assertNoSecretLeak(state, "test-tts-token-secret");
@@ -3274,6 +3290,192 @@ test("pionero LiveKit agent runtime status and stop routes reuse room state", as
       assert.equal(stopBody.tts.reasonCode, "pionero_agent_runner_stopped");
       assertNoSecretLeak(stopBody);
     });
+  });
+});
+
+test("pionero LiveKit agent audio route returns latest private synthesized audio", async () => {
+  const roomName = "pionero-audio-route-room";
+  const rooms = [];
+
+  class FakeRoom {
+    constructor() {
+      this.handlers = new Map();
+      rooms.push(this);
+    }
+
+    async connect() {}
+
+    async disconnect() {}
+
+    on(eventName, handler) {
+      const handlers = this.handlers.get(eventName) || new Set();
+      handlers.add(handler);
+      this.handlers.set(eventName, handlers);
+      return this;
+    }
+
+    off(eventName, handler) {
+      this.handlers.get(eventName)?.delete(handler);
+      return this;
+    }
+
+    async emit(eventName, ...args) {
+      const results = [];
+      this.handlers.get(eventName)?.forEach((handler) => {
+        results.push(handler(...args));
+      });
+      await Promise.all(results);
+    }
+  }
+
+  await startPioneroLiveKitAgentRuntime({
+    RoomClass: FakeRoom,
+    audioIngestEventNames: ["testAudioFrame"],
+    createAgentToken: async () => ({
+      provider: "livekit",
+      url: "wss://livekit.example.test",
+      roomName,
+      agentIdentity: "aihq-pionero-agent",
+      agentName: "AIHQ Pionero Agent",
+      token: "test-agent-token-secret",
+    }),
+    createSttSession: async () => ({
+      provider: "soniox",
+      async transcribe() {
+        return {
+          ok: true,
+          status: "transcribed",
+          provider: "soniox",
+          stage: "stt",
+          text: "Salam Pionero",
+          transcribedAt: "2026-01-02T03:04:06.000Z",
+          networkIo: true,
+          rawAudio: "raw-audio-secret",
+        };
+      },
+    }),
+    createLlmTurnComposer: async () => ({
+      provider: "openai",
+      configured: true,
+      enabled: true,
+      async composeTurn() {
+        return {
+          ok: true,
+          status: "composed",
+          provider: "openai",
+          networkIo: true,
+          responseText: "Salam, I can help.",
+          composedAt: "2026-01-02T03:04:07.000Z",
+          token: "test-openai-token-secret",
+        };
+      },
+    }),
+    createTtsSession: async () => ({
+      provider: "soniox",
+      configured: true,
+      async synthesize() {
+        return {
+          ok: true,
+          status: "synthesized",
+          provider: "soniox",
+          stage: "tts",
+          networkIo: true,
+          audio: Buffer.from("fake-agent-audio"),
+          audioChunkCount: 1,
+          audioByteLength: Buffer.byteLength("fake-agent-audio"),
+          synthesizedAt: "2026-01-02T03:04:08.000Z",
+          token: "test-tts-token-secret",
+          apiSecret: "test-tts-secret",
+          rawAudio: "fake-tts-raw-audio-secret",
+        };
+      },
+    }),
+    env: createLiveKitEnv({
+      PIONERO_LIVEKIT_STT_ENABLED: "1",
+      PIONERO_LIVEKIT_STT_FLUSH_MS: "1",
+      PIONERO_LIVEKIT_LLM_ENABLED: "1",
+      PIONERO_LIVEKIT_TTS_ENABLED: "1",
+    }),
+    logger: createTestLogger(),
+    now: () => new Date("2026-01-02T03:04:05.000Z"),
+    roomName,
+  });
+
+  try {
+    await rooms[0].emit("testAudioFrame", {
+      byteLength: 4,
+      data: new Uint8Array([1, 2, 3, 4]),
+      rawAudio: "raw-audio-secret",
+    });
+    await new Promise((resolve) => {
+      setTimeout(resolve, 5);
+    });
+
+    const app = createVoiceApp();
+
+    await withTestServer(app, async (baseUrl) => {
+      const statusResponse = await fetch(
+        `${baseUrl}/voice/pionero/livekit/agent/status?roomName=${encodeURIComponent(roomName)}`
+      );
+      const statusBody = await statusResponse.json();
+      const serializedStatus = JSON.stringify(statusBody);
+
+      assert.equal(statusResponse.status, 200);
+      assert.equal(statusBody.tts.status, "speech_synthesized");
+      assert.equal(statusBody.tts.synthesesSucceeded, 1);
+      assert.equal(statusBody.tts.audioByteLength, Buffer.byteLength("fake-agent-audio"));
+      assert.equal(serializedStatus.includes("fake-agent-audio"), false);
+      assert.equal(serializedStatus.includes("audioBase64"), false);
+      assert.equal(serializedStatus.includes("test-tts-token-secret"), false);
+      assert.equal(serializedStatus.includes("test-tts-secret"), false);
+      assert.equal(serializedStatus.includes("fake-tts-raw-audio-secret"), false);
+
+      const audioResponse = await fetch(
+        `${baseUrl}/voice/pionero/livekit/agent/audio?roomName=${encodeURIComponent(roomName)}`
+      );
+      const audioBody = await audioResponse.json();
+      const serializedAudio = JSON.stringify(audioBody);
+
+      assert.equal(audioResponse.status, 200);
+      assert.equal(audioBody.ok, true);
+      assert.equal(audioBody.roomName, roomName);
+      assert.equal(audioBody.audioBase64, Buffer.from("fake-agent-audio").toString("base64"));
+      assert.equal(audioBody.audioByteLength, Buffer.byteLength("fake-agent-audio"));
+      assert.equal(audioBody.audioChunkCount, 1);
+      assert.equal(audioBody.mimeType, "audio/pcm; codecs=pcm_s16le; rate=24000");
+      assert.equal(audioBody.contentType, "audio/pcm; codecs=pcm_s16le; rate=24000");
+      assert.equal(audioBody.audioFormat, "pcm_s16le");
+      assert.equal(audioBody.sampleRateHz, 24000);
+      assert.equal(audioBody.synthesizedAt, "2026-01-02T03:04:08.000Z");
+      assert.equal(serializedAudio.includes("test-agent-token-secret"), false);
+      assert.equal(serializedAudio.includes("test-openai-token-secret"), false);
+      assert.equal(serializedAudio.includes("test-tts-token-secret"), false);
+      assert.equal(serializedAudio.includes("test-tts-secret"), false);
+      assert.equal(serializedAudio.includes("raw-audio-secret"), false);
+      assert.equal(serializedAudio.includes("fake-tts-raw-audio-secret"), false);
+      assert.equal(serializedAudio.includes("apiSecret"), false);
+      assert.equal(serializedAudio.includes("token"), false);
+    });
+  } finally {
+    await stopPioneroLiveKitAgentRuntime({ roomName });
+  }
+});
+
+test("pionero LiveKit agent audio route returns safe 404 when audio is missing", async () => {
+  const app = createVoiceApp();
+
+  await withTestServer(app, async (baseUrl) => {
+    const response = await fetch(
+      `${baseUrl}/voice/pionero/livekit/agent/audio?roomName=missing-audio-room`
+    );
+    const body = await response.json();
+
+    assert.equal(response.status, 404);
+    assert.equal(body.ok, false);
+    assert.equal(body.error, "pionero_agent_tts_audio_not_found");
+    assert.equal(body.reasonCode, "pionero_agent_tts_audio_not_found");
+    assert.equal(body.roomName, "missing-audio-room");
+    assertNoSecretLeak(body);
   });
 });
 
