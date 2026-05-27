@@ -2005,7 +2005,7 @@ async function handlePioneroLiveKitAgentStartPlan(
       ...(TrackSource ? { TrackSource } : {}),
     });
 
-    return ok(res, state);
+    return ok(res, toPioneroJsonSafe(state));
   } catch (err) {
     logger.error("voice.pionero.livekit.agent.start_plan.failed", err);
     recordVoiceRouteFailure({
@@ -2018,6 +2018,42 @@ async function handlePioneroLiveKitAgentStartPlan(
   }
 }
 
+function toPioneroJsonSafe(value, seen = new WeakSet()) {
+  if (value === null || value === undefined) return value;
+  if (typeof value === "bigint") return String(value);
+  if (typeof value === "function" || typeof value === "symbol") return undefined;
+
+  if (ArrayBuffer.isView(value)) {
+    return {
+      type: "typed_array_redacted",
+      byteLength: Number(value.byteLength || 0),
+    };
+  }
+
+  if (value instanceof ArrayBuffer) {
+    return {
+      type: "array_buffer_redacted",
+      byteLength: Number(value.byteLength || 0),
+    };
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => toPioneroJsonSafe(item, seen));
+  }
+
+  if (typeof value === "object") {
+    if (seen.has(value)) return "[circular]";
+    seen.add(value);
+
+    return Object.fromEntries(
+      Object.entries(value)
+        .map(([key, item]) => [key, toPioneroJsonSafe(item, seen)])
+        .filter(([, item]) => item !== undefined)
+    );
+  }
+
+  return value;
+}
 async function handlePioneroLiveKitAgentStatus(req, res) {
   const logger = getRouteLogger(req, "voice.pionero.livekit.agent.status");
 
@@ -2032,7 +2068,7 @@ async function handlePioneroLiveKitAgentStatus(req, res) {
       });
     }
 
-    return ok(res, state);
+    return ok(res, toPioneroJsonSafe(state));
   } catch (err) {
     logger.error("voice.pionero.livekit.agent.status.failed", err);
     recordVoiceRouteFailure({
@@ -2059,7 +2095,7 @@ async function handlePioneroLiveKitAgentStopPlan(req, res) {
       });
     }
 
-    return ok(res, state);
+    return ok(res, toPioneroJsonSafe(state));
   } catch (err) {
     logger.error("voice.pionero.livekit.agent.stop_plan.failed", err);
     recordVoiceRouteFailure({
