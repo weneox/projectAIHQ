@@ -3,6 +3,7 @@ import { Room, RoomEvent, createLocalAudioTrack } from "livekit-client";
 
 import {
   createPioneroLiveKitSession as defaultCreatePioneroLiveKitSession,
+  getPioneroLiveKitAgentAudio as defaultGetPioneroLiveKitAgentAudio,
   getPioneroLiveKitAgentStatus as defaultGetPioneroLiveKitAgentStatus,
   startPioneroLiveKitAgentPlan as defaultStartPioneroLiveKitAgentPlan,
   stopPioneroLiveKitAgentPlan as defaultStopPioneroLiveKitAgentPlan,
@@ -65,8 +66,11 @@ const TTS_STATUSES = new Set([
   "idle",
   "planned",
   "speech_plan_built",
+  "synthesizing",
+  "speech_synthesized",
   "error",
 ]);
+const PIONERO_TTS_DEFAULT_SAMPLE_RATE_HZ = 24000;
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim() || fallback;
@@ -84,6 +88,75 @@ function n(value, fallback = 0) {
 
 function isEnabledFlag(value = "") {
   return ["1", "true"].includes(s(value).toLowerCase());
+}
+
+function decodeBase64Audio(audioBase64 = "") {
+  const binary = window.atob(s(audioBase64));
+  const bytes = new Uint8Array(binary.length);
+
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+
+  return bytes;
+}
+
+function buildPcm16WavBlob(bytes, sampleRateHz = PIONERO_TTS_DEFAULT_SAMPLE_RATE_HZ) {
+  const dataLength = bytes.byteLength;
+  const header = new ArrayBuffer(44);
+  const view = new DataView(header);
+  const writeString = (offset, value) => {
+    for (let index = 0; index < value.length; index += 1) {
+      view.setUint8(offset + index, value.charCodeAt(index));
+    }
+  };
+  const sampleRate = n(sampleRateHz, PIONERO_TTS_DEFAULT_SAMPLE_RATE_HZ);
+  const channels = 1;
+  const bitsPerSample = 16;
+  const blockAlign = channels * (bitsPerSample / 8);
+
+  writeString(0, "RIFF");
+  view.setUint32(4, 36 + dataLength, true);
+  writeString(8, "WAVE");
+  writeString(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, channels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * blockAlign, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, bitsPerSample, true);
+  writeString(36, "data");
+  view.setUint32(40, dataLength, true);
+
+  return new Blob([header, bytes], { type: "audio/wav" });
+}
+
+function buildAgentAudioBlob(payload = {}) {
+  const bytes = decodeBase64Audio(payload.audioBase64);
+  const contentType = s(payload.mimeType || payload.contentType);
+  const audioFormat = s(payload.audioFormat).toLowerCase();
+  const normalizedContentType = contentType.toLowerCase();
+
+  if (
+    audioFormat.includes("pcm_s16le") ||
+    normalizedContentType.includes("pcm")
+  ) {
+    return buildPcm16WavBlob(bytes, payload.sampleRateHz);
+  }
+
+  return new Blob([bytes], {
+    type: contentType || "audio/mpeg",
+  });
+}
+
+function createObjectUrl(blob) {
+  return window.URL?.createObjectURL?.(blob) || "";
+}
+
+function revokeObjectUrl(url = "") {
+  if (!url) return;
+  window.URL?.revokeObjectURL?.(url);
 }
 
 export function readPioneroMonitorOnlyMode() {
@@ -224,6 +297,11 @@ function readAgentTtsState(tts = {}) {
     agentTtsEnabled: payload.enabled === true,
     agentTtsNetworkIo: payload.networkIo === true,
     agentTtsSpeechPlansCreated: n(payload.speechPlansCreated),
+    agentTtsSynthesesAttempted: n(payload.synthesesAttempted),
+    agentTtsSynthesesSucceeded: n(payload.synthesesSucceeded),
+    agentTtsSynthesesFailed: n(payload.synthesesFailed),
+    agentTtsAudioByteLength: n(payload.audioByteLength),
+    agentTtsAudioChunkCount: n(payload.audioChunkCount),
     agentTtsLastInputText: s(payload.lastInputText).slice(0, 2_000),
     agentTtsLastAudioPlan: s(payload.lastAudioPlan).slice(0, 2_000),
     agentTtsLastObservedAt: s(payload.lastObservedAt),
@@ -288,6 +366,11 @@ function readMonitorOnlyAgentState() {
     agentTtsEnabled: false,
     agentTtsNetworkIo: false,
     agentTtsSpeechPlansCreated: 0,
+    agentTtsSynthesesAttempted: 0,
+    agentTtsSynthesesSucceeded: 0,
+    agentTtsSynthesesFailed: 0,
+    agentTtsAudioByteLength: 0,
+    agentTtsAudioChunkCount: 0,
     agentTtsLastInputText: "",
     agentTtsLastAudioPlan: "",
     agentTtsLastObservedAt: "",
@@ -310,6 +393,7 @@ function readErrorMessage(err, fallback = "pionero_livekit_failed", sensitiveVal
 
 export default function usePioneroLiveKitRoom({
   createPioneroLiveKitSession = defaultCreatePioneroLiveKitSession,
+  getPioneroLiveKitAgentAudio = defaultGetPioneroLiveKitAgentAudio,
   getPioneroLiveKitAgentStatus = defaultGetPioneroLiveKitAgentStatus,
   startPioneroLiveKitAgentPlan = defaultStartPioneroLiveKitAgentPlan,
   stopPioneroLiveKitAgentPlan = defaultStopPioneroLiveKitAgentPlan,
@@ -352,10 +436,20 @@ export default function usePioneroLiveKitRoom({
   const [agentTtsEnabled, setAgentTtsEnabled] = useState(false);
   const [agentTtsNetworkIo, setAgentTtsNetworkIo] = useState(false);
   const [agentTtsSpeechPlansCreated, setAgentTtsSpeechPlansCreated] = useState(0);
+  const [agentTtsSynthesesAttempted, setAgentTtsSynthesesAttempted] = useState(0);
+  const [agentTtsSynthesesSucceeded, setAgentTtsSynthesesSucceeded] = useState(0);
+  const [agentTtsSynthesesFailed, setAgentTtsSynthesesFailed] = useState(0);
+  const [agentTtsAudioByteLength, setAgentTtsAudioByteLength] = useState(0);
+  const [agentTtsAudioChunkCount, setAgentTtsAudioChunkCount] = useState(0);
   const [agentTtsLastInputText, setAgentTtsLastInputText] = useState("");
   const [agentTtsLastAudioPlan, setAgentTtsLastAudioPlan] = useState("");
   const [agentTtsLastObservedAt, setAgentTtsLastObservedAt] = useState("");
   const [agentTtsReasonCode, setAgentTtsReasonCode] = useState("");
+  const [agentAudioPlaybackStatus, setAgentAudioPlaybackStatus] = useState("idle");
+  const [agentAudioPlaybackReasonCode, setAgentAudioPlaybackReasonCode] = useState("");
+  const [agentAudioPlaybackAudioId, setAgentAudioPlaybackAudioId] = useState("");
+  const [agentAudioPlaybackByteLength, setAgentAudioPlaybackByteLength] = useState(0);
+  const [agentAudioPlaybackSynthesizedAt, setAgentAudioPlaybackSynthesizedAt] = useState("");
   const [monitorOnlyMode, setMonitorOnlyMode] = useState(() =>
     readPioneroMonitorOnlyMode()
   );
@@ -367,6 +461,10 @@ export default function usePioneroLiveKitRoom({
   const roomListenersRef = useRef(null);
   const roomRef = useRef(null);
   const statusRef = useRef("idle");
+  const agentAudioElementRef = useRef(null);
+  const agentAudioObjectUrlRef = useRef("");
+  const lastFetchedTtsSynthesesSucceededRef = useRef(0);
+  const pendingAgentAudioPayloadRef = useRef(null);
 
   const setSafeStatus = useCallback((nextStatus) => {
     statusRef.current = nextStatus;
@@ -424,6 +522,11 @@ export default function usePioneroLiveKitRoom({
     setAgentTtsEnabled(nextAgentState.agentTtsEnabled === true);
     setAgentTtsNetworkIo(nextAgentState.agentTtsNetworkIo === true);
     setAgentTtsSpeechPlansCreated(n(nextAgentState.agentTtsSpeechPlansCreated));
+    setAgentTtsSynthesesAttempted(n(nextAgentState.agentTtsSynthesesAttempted));
+    setAgentTtsSynthesesSucceeded(n(nextAgentState.agentTtsSynthesesSucceeded));
+    setAgentTtsSynthesesFailed(n(nextAgentState.agentTtsSynthesesFailed));
+    setAgentTtsAudioByteLength(n(nextAgentState.agentTtsAudioByteLength));
+    setAgentTtsAudioChunkCount(n(nextAgentState.agentTtsAudioChunkCount));
     setAgentTtsLastInputText(
       s(nextAgentState.agentTtsLastInputText).slice(0, 2_000)
     );
@@ -434,7 +537,177 @@ export default function usePioneroLiveKitRoom({
     setAgentTtsReasonCode(s(nextAgentState.agentTtsReasonCode));
   }, []);
 
+  const clearAgentAudioPlayback = useCallback(() => {
+    pendingAgentAudioPayloadRef.current = null;
+    lastFetchedTtsSynthesesSucceededRef.current = 0;
+    agentAudioElementRef.current?.pause?.();
+    revokeObjectUrl(agentAudioObjectUrlRef.current);
+    agentAudioObjectUrlRef.current = "";
+
+    if (agentAudioElementRef.current) {
+      agentAudioElementRef.current.src = "";
+    }
+
+    if (mountedRef.current) {
+      setAgentAudioPlaybackStatus("idle");
+      setAgentAudioPlaybackReasonCode("");
+      setAgentAudioPlaybackAudioId("");
+      setAgentAudioPlaybackByteLength(0);
+      setAgentAudioPlaybackSynthesizedAt("");
+    }
+  }, []);
+
+  const playAgentAudioPayload = useCallback(async (payload = {}) => {
+    const audioBase64 = s(payload.audioBase64);
+
+    if (!audioBase64) {
+      if (mountedRef.current) {
+        setAgentAudioPlaybackStatus("error");
+        setAgentAudioPlaybackReasonCode("pionero_agent_audio_missing");
+      }
+
+      return {
+        ok: false,
+        status: "error",
+      };
+    }
+
+    if (mountedRef.current) {
+      setAgentAudioPlaybackStatus("loading");
+      setAgentAudioPlaybackReasonCode("");
+      setAgentAudioPlaybackAudioId(s(payload.audioId));
+      setAgentAudioPlaybackByteLength(n(payload.audioByteLength));
+      setAgentAudioPlaybackSynthesizedAt(s(payload.synthesizedAt));
+    }
+
+    try {
+      const blob = buildAgentAudioBlob(payload);
+      const objectUrl = createObjectUrl(blob);
+
+      if (!objectUrl) {
+        throw new Error("pionero_agent_audio_url_failed");
+      }
+
+      let audio = agentAudioElementRef.current;
+
+      if (!audio) {
+        audio = new Audio();
+        audio.preload = "auto";
+        audio.onended = () => {
+          if (mountedRef.current) {
+            setAgentAudioPlaybackStatus("played");
+          }
+        };
+        audio.onerror = () => {
+          if (mountedRef.current) {
+            setAgentAudioPlaybackStatus("error");
+            setAgentAudioPlaybackReasonCode("pionero_agent_audio_playback_failed");
+          }
+        };
+        agentAudioElementRef.current = audio;
+      }
+
+      revokeObjectUrl(agentAudioObjectUrlRef.current);
+      agentAudioObjectUrlRef.current = objectUrl;
+      audio.src = objectUrl;
+      pendingAgentAudioPayloadRef.current = payload;
+
+      await audio.play();
+      pendingAgentAudioPayloadRef.current = null;
+
+      if (mountedRef.current) {
+        setAgentAudioPlaybackStatus("playing");
+        setAgentAudioPlaybackReasonCode("");
+      }
+
+      return {
+        ok: true,
+        status: "playing",
+      };
+    } catch (err) {
+      pendingAgentAudioPayloadRef.current = payload;
+
+      if (mountedRef.current) {
+        setAgentAudioPlaybackStatus("blocked");
+        setAgentAudioPlaybackReasonCode(
+          readErrorMessage(err, "pionero_agent_audio_autoplay_blocked")
+        );
+      }
+
+      return {
+        ok: false,
+        status: "blocked",
+      };
+    }
+  }, []);
+
+  const fetchAndPlayAgentAudio = useCallback(async (targetRoomName = "") => {
+    const nextRoomName = s(targetRoomName || runtimeRoomNameRef.current || roomName);
+
+    if (!nextRoomName) {
+      return {
+        ok: false,
+        status: "idle",
+      };
+    }
+
+    if (mountedRef.current) {
+      setAgentAudioPlaybackStatus("loading");
+      setAgentAudioPlaybackReasonCode("");
+    }
+
+    try {
+      const audioPayload = await getPioneroLiveKitAgentAudio({
+        roomName: nextRoomName,
+      });
+
+      return playAgentAudioPayload(audioPayload);
+    } catch (err) {
+      if (mountedRef.current) {
+        setAgentAudioPlaybackStatus("error");
+        setAgentAudioPlaybackReasonCode(
+          readErrorMessage(err, "pionero_agent_audio_fetch_failed")
+        );
+      }
+
+      return {
+        ok: false,
+        status: "error",
+      };
+    }
+  }, [getPioneroLiveKitAgentAudio, playAgentAudioPayload, roomName]);
+
+  const maybeFetchAndPlayAgentAudio = useCallback(async (
+    nextRoomName = "",
+    nextAgentState = {}
+  ) => {
+    const synthesesSucceeded = n(nextAgentState.agentTtsSynthesesSucceeded);
+
+    if (
+      !s(nextRoomName) ||
+      synthesesSucceeded <= 0 ||
+      synthesesSucceeded <= lastFetchedTtsSynthesesSucceededRef.current
+    ) {
+      return {
+        ok: false,
+        status: "idle",
+      };
+    }
+
+    lastFetchedTtsSynthesesSucceededRef.current = synthesesSucceeded;
+    return fetchAndPlayAgentAudio(nextRoomName);
+  }, [fetchAndPlayAgentAudio]);
+
+  const playLatestAgentAudio = useCallback(async () => {
+    if (pendingAgentAudioPayloadRef.current) {
+      return playAgentAudioPayload(pendingAgentAudioPayloadRef.current);
+    }
+
+    return fetchAndPlayAgentAudio(runtimeRoomNameRef.current || roomName);
+  }, [fetchAndPlayAgentAudio, playAgentAudioPayload, roomName]);
+
   const clearAgentState = useCallback(() => {
+    clearAgentAudioPlayback();
     setSafeAgentState({
       agentStatus: "idle",
       agentReasonCode: "",
@@ -467,12 +740,17 @@ export default function usePioneroLiveKitRoom({
       agentTtsEnabled: false,
       agentTtsNetworkIo: false,
       agentTtsSpeechPlansCreated: 0,
+      agentTtsSynthesesAttempted: 0,
+      agentTtsSynthesesSucceeded: 0,
+      agentTtsSynthesesFailed: 0,
+      agentTtsAudioByteLength: 0,
+      agentTtsAudioChunkCount: 0,
       agentTtsLastInputText: "",
       agentTtsLastAudioPlan: "",
       agentTtsLastObservedAt: "",
       agentTtsReasonCode: "",
     });
-  }, [setSafeAgentState]);
+  }, [clearAgentAudioPlayback, setSafeAgentState]);
 
   const refreshAgentStatus = useCallback(async () => {
     const nextRoomName = s(runtimeRoomNameRef.current || roomName);
@@ -488,7 +766,9 @@ export default function usePioneroLiveKitRoom({
       const agentState = await getPioneroLiveKitAgentStatus({
         roomName: nextRoomName,
       });
-      setSafeAgentState(readAgentState(agentState));
+      const nextAgentState = readAgentState(agentState);
+      setSafeAgentState(nextAgentState);
+      void maybeFetchAndPlayAgentAudio(nextRoomName, nextAgentState);
 
       return {
         ok: true,
@@ -507,7 +787,12 @@ export default function usePioneroLiveKitRoom({
         status: "warning",
       };
     }
-  }, [getPioneroLiveKitAgentStatus, roomName, setSafeAgentState]);
+  }, [
+    getPioneroLiveKitAgentStatus,
+    maybeFetchAndPlayAgentAudio,
+    roomName,
+    setSafeAgentState,
+  ]);
 
   const detachRoomListeners = useCallback(() => {
     const listeners = roomListenersRef.current;
@@ -559,6 +844,8 @@ export default function usePioneroLiveKitRoom({
       // Ignore local track stop failures during teardown.
     }
 
+    clearAgentAudioPlayback();
+
     if (
       updateState &&
       runtimeRoomName &&
@@ -589,6 +876,7 @@ export default function usePioneroLiveKitRoom({
       statusRef.current = "idle";
     }
   }, [
+    clearAgentAudioPlayback,
     clearAgentState,
     detachRoomListeners,
     setSafeStatus,
@@ -645,7 +933,9 @@ export default function usePioneroLiveKitRoom({
           const agentPlan = await startPioneroLiveKitAgentPlan({
             roomName: nextRoomName,
           });
-          setSafeAgentState(readAgentState(agentPlan));
+          const nextAgentState = readAgentState(agentPlan);
+          setSafeAgentState(nextAgentState);
+          void maybeFetchAndPlayAgentAudio(nextRoomName, nextAgentState);
         } catch (agentErr) {
           setSafeAgentState({
             agentStatus: "warning",
@@ -713,7 +1003,9 @@ export default function usePioneroLiveKitRoom({
         const agentPlan = await startPioneroLiveKitAgentPlan({
           roomName: nextRoomName,
         });
-        setSafeAgentState(readAgentState(agentPlan));
+        const nextAgentState = readAgentState(agentPlan);
+        setSafeAgentState(nextAgentState);
+        void maybeFetchAndPlayAgentAudio(nextRoomName, nextAgentState);
       } catch (agentErr) {
         setSafeAgentState({
           agentStatus: "warning",
@@ -786,6 +1078,7 @@ export default function usePioneroLiveKitRoom({
     clearAgentState,
     createPioneroLiveKitSession,
     disconnect,
+    maybeFetchAndPlayAgentAudio,
     setSafeParticipants,
     setSafeAgentState,
     setSafeStatus,
@@ -810,6 +1103,7 @@ export default function usePioneroLiveKitRoom({
     participants,
     connect,
     disconnect,
+    playLatestAgentAudio,
     refreshAgentStatus,
     localMicEnabled,
     monitorOnlyMode,
@@ -844,9 +1138,19 @@ export default function usePioneroLiveKitRoom({
     agentTtsEnabled,
     agentTtsNetworkIo,
     agentTtsSpeechPlansCreated,
+    agentTtsSynthesesAttempted,
+    agentTtsSynthesesSucceeded,
+    agentTtsSynthesesFailed,
+    agentTtsAudioByteLength,
+    agentTtsAudioChunkCount,
     agentTtsLastInputText,
     agentTtsLastAudioPlan,
     agentTtsLastObservedAt,
     agentTtsReasonCode,
+    agentAudioPlaybackStatus,
+    agentAudioPlaybackReasonCode,
+    agentAudioPlaybackAudioId,
+    agentAudioPlaybackByteLength,
+    agentAudioPlaybackSynthesizedAt,
   };
 }

@@ -62,6 +62,13 @@ export function createPioneroLiveKitAgentRuntime(input = {}) {
     return entry?.runner?.getState?.() || null;
   }
 
+  function getLatestTtsAudio(audioInput = {}) {
+    const roomName = readRuntimeRoomName(audioInput, audioInput.env || env);
+    const entry = runners.get(roomName);
+
+    return entry?.runner?.getLatestTtsAudio?.() || null;
+  }
+
   async function stop(stopInput = {}) {
     const roomName = readRuntimeRoomName(stopInput, stopInput.env || env);
     const entry = runners.get(roomName);
@@ -77,6 +84,7 @@ export function createPioneroLiveKitAgentRuntime(input = {}) {
 
   return {
     clear,
+    getLatestTtsAudio,
     getState,
     start,
     stop,
@@ -91,6 +99,10 @@ export function startPioneroLiveKitAgentRuntime(input = {}) {
 
 export function getPioneroLiveKitAgentRuntimeState(input = {}) {
   return defaultPioneroLiveKitAgentRuntime.getState(input);
+}
+
+export function getPioneroLiveKitAgentRuntimeLatestTtsAudio(input = {}) {
+  return defaultPioneroLiveKitAgentRuntime.getLatestTtsAudio(input);
 }
 
 export function stopPioneroLiveKitAgentRuntime(input = {}) {
