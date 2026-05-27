@@ -67,6 +67,7 @@ import {
   getPioneroLiveKitAgentRuntimeState,
   startPioneroLiveKitAgentRuntime,
   stopPioneroLiveKitAgentRuntime,
+  evaluatePioneroRealtimeReadinessGuard,
   getPioneroRealtimeAgentState,
   startPioneroRealtimeAgent,
   stopPioneroRealtimeAgent,
@@ -1979,6 +1980,31 @@ async function readPioneroLiveKitRouteRoomClient({
     }
   }
 
+
+function readPioneroRealtimeMaxFirstAudioLatencyMs() {
+  const value = n(
+    process.env.PIONERO_REALTIME_MAX_FIRST_AUDIO_LATENCY_MS ||
+      process.env.PIONERO_FIRST_AUDIO_MAX_LATENCY_MS,
+    1200
+  );
+
+  return value > 0 ? value : 1200;
+}
+
+function buildPioneroRealtimeRouteState(state = {}, options = {}) {
+  const realtimeReadiness = evaluatePioneroRealtimeReadinessGuard(state, {
+    allowPendingFirstAudio: options.allowPendingFirstAudio === true,
+    maxFirstAudioLatencyMs: readPioneroRealtimeMaxFirstAudioLatencyMs(),
+  });
+
+  return toPioneroJsonSafe({
+    ...state,
+    lane: "pionero_realtime",
+    transport: "livekit_audio_track",
+    realtimeReadiness,
+  });
+}
+
 function readPioneroRouteContext(req = {}, scope = {}) {
   return {
     tenantContext: {
@@ -2128,10 +2154,8 @@ async function handlePioneroLiveKitAgentStartPlan(
     });
 
     if (realtimeState?.enabled === true) {
-      return ok(res, toPioneroJsonSafe({
-        ...realtimeState,
-        lane: "pionero_realtime",
-        transport: "livekit_audio_track",
+      return ok(res, buildPioneroRealtimeRouteState(realtimeState, {
+        allowPendingFirstAudio: true,
       }));
     }
 
@@ -2265,11 +2289,7 @@ async function handlePioneroLiveKitAgentStatus(
     const realtimeState = realtimeRegistry?.getState?.({ roomName });
 
     if (realtimeState) {
-      return ok(res, toPioneroJsonSafe({
-        ...realtimeState,
-        lane: "pionero_realtime",
-        transport: "livekit_audio_track",
-      }));
+      return ok(res, buildPioneroRealtimeRouteState(realtimeState));
     }
 
     const state = getPioneroLiveKitAgentRuntimeState({ roomName });
@@ -2358,10 +2378,8 @@ async function handlePioneroLiveKitAgentStopPlan(
     const realtimeState = await realtimeRegistry?.stop?.({ roomName });
 
     if (realtimeState) {
-      return ok(res, toPioneroJsonSafe({
-        ...realtimeState,
-        lane: "pionero_realtime",
-        transport: "livekit_audio_track",
+      return ok(res, buildPioneroRealtimeRouteState(realtimeState, {
+        allowPendingFirstAudio: true,
       }));
     }
 
