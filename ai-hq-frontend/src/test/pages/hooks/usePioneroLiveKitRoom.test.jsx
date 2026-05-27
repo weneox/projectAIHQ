@@ -143,6 +143,114 @@ function buildAgentPlan(overrides = {}) {
   };
 }
 
+function buildSynthesizedAgentPlan(overrides = {}) {
+  return buildAgentPlan({
+    status: "connected",
+    tts: {
+      provider: "soniox",
+      enabled: true,
+      status: "speech_synthesized",
+      speechPlansCreated: 1,
+      synthesesAttempted: 1,
+      synthesesSucceeded: 1,
+      synthesesFailed: 0,
+      audioByteLength: 12,
+      audioChunkCount: 1,
+      lastInputText: "Salam",
+      lastAudioPlan: "soniox_tts_audio_ready",
+      lastObservedAt: "2026-01-02T03:04:08.000Z",
+      reasonCode: "",
+      networkIo: true,
+    },
+    ...overrides,
+  });
+}
+
+function buildAgentAudioPayload(overrides = {}) {
+  const audioBase64 = window.btoa("RIFFxxxxWAVE");
+
+  return {
+    ok: true,
+    audioId: "agent-audio-1",
+    audioBase64,
+    audioByteLength: 12,
+    audioChunkCount: 1,
+    mimeType: "audio/wav",
+    contentType: "audio/wav",
+    audioFormat: "wav",
+    sampleRateHz: 24000,
+    synthesizedAt: "2026-01-02T03:04:08.000Z",
+    ...overrides,
+  };
+}
+
+function buildAgentAudioNotFoundError() {
+  const err = new Error("pionero_agent_tts_audio_not_found");
+  err.status = 404;
+  err.code = "pionero_agent_tts_audio_not_found";
+  err.payload = {
+    error: "pionero_agent_tts_audio_not_found",
+    reasonCode: "pionero_agent_tts_audio_not_found",
+  };
+  return err;
+}
+
+function stubAgentAudioPlayback({ play = vi.fn().mockResolvedValue(undefined) } = {}) {
+  const originalCreateObjectURL = window.URL.createObjectURL;
+  const originalRevokeObjectURL = window.URL.revokeObjectURL;
+  const createdBlobs = [];
+  const createObjectURL = vi.fn((blob) => {
+    createdBlobs.push(blob);
+    return `blob:pionero-agent-audio-${createdBlobs.length}`;
+  });
+  const revokeObjectURL = vi.fn();
+  const pause = vi.fn();
+  const AudioMock = vi.fn(function MockAudio() {
+    return {
+      onended: null,
+      onerror: null,
+      pause,
+      play,
+      preload: "",
+      src: "",
+    };
+  });
+
+  window.URL.createObjectURL = createObjectURL;
+  window.URL.revokeObjectURL = revokeObjectURL;
+  vi.stubGlobal("Audio", AudioMock);
+
+  return {
+    AudioMock,
+    createObjectURL,
+    createdBlobs,
+    pause,
+    play,
+    revokeObjectURL,
+    restore() {
+      if (originalCreateObjectURL) {
+        window.URL.createObjectURL = originalCreateObjectURL;
+      } else {
+        delete window.URL.createObjectURL;
+      }
+
+      if (originalRevokeObjectURL) {
+        window.URL.revokeObjectURL = originalRevokeObjectURL;
+      } else {
+        delete window.URL.revokeObjectURL;
+      }
+
+      vi.unstubAllGlobals();
+    },
+  };
+}
+
+async function flushPromises() {
+  await act(async () => {
+    await Promise.resolve();
+  });
+}
+
 describe("usePioneroLiveKitRoom", () => {
   beforeEach(() => {
     mockLiveKit.rooms.length = 0;
@@ -683,30 +791,7 @@ describe("usePioneroLiveKitRoom", () => {
   });
 
   it("plays newly synthesized agent audio using the returned WAV content type", async () => {
-    const originalCreateObjectURL = window.URL.createObjectURL;
-    const originalRevokeObjectURL = window.URL.revokeObjectURL;
-    const createdBlobs = [];
-    const createObjectURL = vi.fn((blob) => {
-      createdBlobs.push(blob);
-      return "blob:pionero-agent-audio";
-    });
-    const revokeObjectURL = vi.fn();
-    const play = vi.fn().mockResolvedValue(undefined);
-    const pause = vi.fn();
-    const AudioMock = vi.fn(function MockAudio() {
-      return {
-        onended: null,
-        onerror: null,
-        pause,
-        play,
-        preload: "",
-        src: "",
-      };
-    });
-
-    window.URL.createObjectURL = createObjectURL;
-    window.URL.revokeObjectURL = revokeObjectURL;
-    vi.stubGlobal("Audio", AudioMock);
+    const playback = stubAgentAudioPlayback();
 
     try {
       const createPioneroLiveKitSession = vi
@@ -716,39 +801,10 @@ describe("usePioneroLiveKitRoom", () => {
         .fn()
         .mockResolvedValue(buildAgentPlan());
       const getPioneroLiveKitAgentStatus = vi.fn().mockResolvedValue(
-        buildAgentPlan({
-          status: "connected",
-          tts: {
-            provider: "soniox",
-            enabled: true,
-            status: "speech_synthesized",
-            speechPlansCreated: 1,
-            synthesesAttempted: 1,
-            synthesesSucceeded: 1,
-            synthesesFailed: 0,
-            audioByteLength: 12,
-            audioChunkCount: 1,
-            lastInputText: "Salam",
-            lastAudioPlan: "soniox_tts_audio_ready",
-            lastObservedAt: "2026-01-02T03:04:08.000Z",
-            reasonCode: "",
-            networkIo: true,
-          },
-        })
+        buildSynthesizedAgentPlan()
       );
-      const audioBase64 = window.btoa("RIFFxxxxWAVE");
-      const getPioneroLiveKitAgentAudio = vi.fn().mockResolvedValue({
-        ok: true,
-        audioId: "agent-audio-1",
-        audioBase64,
-        audioByteLength: 12,
-        audioChunkCount: 1,
-        mimeType: "audio/wav",
-        contentType: "audio/wav",
-        audioFormat: "wav",
-        sampleRateHz: 24000,
-        synthesizedAt: "2026-01-02T03:04:08.000Z",
-      });
+      const audioPayload = buildAgentAudioPayload();
+      const getPioneroLiveKitAgentAudio = vi.fn().mockResolvedValue(audioPayload);
       mockLiveKit.createLocalAudioTrack.mockResolvedValue({ stop: vi.fn() });
 
       const { result } = renderHook(() =>
@@ -773,31 +829,247 @@ describe("usePioneroLiveKitRoom", () => {
           roomName: "pionero-browser-test",
         });
       });
-      await waitFor(() => expect(play).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(playback.play).toHaveBeenCalledTimes(1));
 
-      expect(createObjectURL).toHaveBeenCalledTimes(1);
-      expect(createdBlobs[0]).toBeInstanceOf(Blob);
-      expect(createdBlobs[0].type).toBe("audio/wav");
-      await expect(createdBlobs[0].text()).resolves.toBe("RIFFxxxxWAVE");
-      expect(result.current.agentAudioPlaybackStatus).toBe("playing");
+      expect(playback.createObjectURL).toHaveBeenCalledTimes(1);
+      expect(playback.createdBlobs[0]).toBeInstanceOf(Blob);
+      expect(playback.createdBlobs[0].type).toBe("audio/wav");
+      await expect(playback.createdBlobs[0].text()).resolves.toBe("RIFFxxxxWAVE");
+      expect(result.current.agentAudioPlaybackStatus).toBe("played");
       expect(result.current.agentAudioPlaybackAudioId).toBe("agent-audio-1");
       expect(result.current.agentAudioPlaybackByteLength).toBe(12);
       expect(JSON.stringify(result.current)).not.toContain("audioBase64");
-      expect(JSON.stringify(result.current)).not.toContain(audioBase64);
+      expect(JSON.stringify(result.current)).not.toContain(audioPayload.audioBase64);
     } finally {
-      if (originalCreateObjectURL) {
-        window.URL.createObjectURL = originalCreateObjectURL;
-      } else {
-        delete window.URL.createObjectURL;
-      }
+      playback.restore();
+    }
+  });
 
-      if (originalRevokeObjectURL) {
-        window.URL.revokeObjectURL = originalRevokeObjectURL;
-      } else {
-        delete window.URL.revokeObjectURL;
-      }
+  it("retries agent audio fetch when synthesized audio is not ready yet and eventually plays", async () => {
+    vi.useFakeTimers();
+    const playback = stubAgentAudioPlayback();
+    let unmount = () => {};
 
-      vi.unstubAllGlobals();
+    try {
+      const createPioneroLiveKitSession = vi
+        .fn()
+        .mockResolvedValue(buildSession());
+      const startPioneroLiveKitAgentPlan = vi
+        .fn()
+        .mockResolvedValue(buildAgentPlan());
+      const getPioneroLiveKitAgentStatus = vi.fn().mockResolvedValue(
+        buildSynthesizedAgentPlan()
+      );
+      const getPioneroLiveKitAgentAudio = vi
+        .fn()
+        .mockRejectedValueOnce(buildAgentAudioNotFoundError())
+        .mockResolvedValue(buildAgentAudioPayload());
+      mockLiveKit.createLocalAudioTrack.mockResolvedValue({ stop: vi.fn() });
+
+      const rendered = renderHook(() =>
+        usePioneroLiveKitRoom({
+          createPioneroLiveKitSession,
+          getPioneroLiveKitAgentAudio,
+          getPioneroLiveKitAgentStatus,
+          startPioneroLiveKitAgentPlan,
+        })
+      );
+      unmount = rendered.unmount;
+
+      await act(async () => {
+        await rendered.result.current.connect();
+      });
+
+      await act(async () => {
+        await rendered.result.current.refreshAgentStatus();
+      });
+      await flushPromises();
+
+      expect(getPioneroLiveKitAgentAudio).toHaveBeenCalledTimes(1);
+      expect(rendered.result.current.agentAudioPlaybackStatus).toBe("loading");
+      expect(rendered.result.current.agentAudioPlaybackReasonCode).toBe(
+        "pionero_agent_tts_audio_not_found"
+      );
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(400);
+      });
+      await flushPromises();
+
+      expect(getPioneroLiveKitAgentAudio).toHaveBeenCalledTimes(2);
+      expect(playback.play).toHaveBeenCalledTimes(1);
+      expect(rendered.result.current.agentAudioPlaybackStatus).toBe("played");
+    } finally {
+      unmount();
+      vi.clearAllTimers();
+      vi.useRealTimers();
+      playback.restore();
+    }
+  });
+
+  it("does not permanently fail playback on the first agent audio 404", async () => {
+    vi.useFakeTimers();
+    const playback = stubAgentAudioPlayback();
+    let unmount = () => {};
+
+    try {
+      const createPioneroLiveKitSession = vi
+        .fn()
+        .mockResolvedValue(buildSession());
+      const startPioneroLiveKitAgentPlan = vi
+        .fn()
+        .mockResolvedValue(buildAgentPlan());
+      const getPioneroLiveKitAgentStatus = vi.fn().mockResolvedValue(
+        buildSynthesizedAgentPlan()
+      );
+      const getPioneroLiveKitAgentAudio = vi
+        .fn()
+        .mockRejectedValueOnce(buildAgentAudioNotFoundError())
+        .mockResolvedValue(buildAgentAudioPayload());
+      mockLiveKit.createLocalAudioTrack.mockResolvedValue({ stop: vi.fn() });
+
+      const rendered = renderHook(() =>
+        usePioneroLiveKitRoom({
+          createPioneroLiveKitSession,
+          getPioneroLiveKitAgentAudio,
+          getPioneroLiveKitAgentStatus,
+          startPioneroLiveKitAgentPlan,
+        })
+      );
+      unmount = rendered.unmount;
+
+      await act(async () => {
+        await rendered.result.current.connect();
+      });
+
+      await act(async () => {
+        await rendered.result.current.refreshAgentStatus();
+      });
+      await flushPromises();
+
+      expect(getPioneroLiveKitAgentAudio).toHaveBeenCalledTimes(1);
+      expect(rendered.result.current.agentAudioPlaybackStatus).toBe("loading");
+      expect(rendered.result.current.agentAudioPlaybackStatus).not.toBe("error");
+      expect(playback.play).not.toHaveBeenCalled();
+    } finally {
+      unmount();
+      vi.clearAllTimers();
+      vi.useRealTimers();
+      playback.restore();
+    }
+  });
+
+  it("does not replay duplicate synthesized counts", async () => {
+    const playback = stubAgentAudioPlayback();
+
+    try {
+      const createPioneroLiveKitSession = vi
+        .fn()
+        .mockResolvedValue(buildSession());
+      const startPioneroLiveKitAgentPlan = vi
+        .fn()
+        .mockResolvedValue(buildAgentPlan());
+      const getPioneroLiveKitAgentStatus = vi.fn().mockResolvedValue(
+        buildSynthesizedAgentPlan()
+      );
+      const getPioneroLiveKitAgentAudio = vi
+        .fn()
+        .mockResolvedValue(buildAgentAudioPayload());
+      mockLiveKit.createLocalAudioTrack.mockResolvedValue({ stop: vi.fn() });
+
+      const { result } = renderHook(() =>
+        usePioneroLiveKitRoom({
+          createPioneroLiveKitSession,
+          getPioneroLiveKitAgentAudio,
+          getPioneroLiveKitAgentStatus,
+          startPioneroLiveKitAgentPlan,
+        })
+      );
+
+      await act(async () => {
+        await result.current.connect();
+      });
+
+      await act(async () => {
+        await result.current.refreshAgentStatus();
+      });
+
+      await waitFor(() => expect(playback.play).toHaveBeenCalledTimes(1));
+      expect(getPioneroLiveKitAgentAudio).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        await result.current.refreshAgentStatus();
+      });
+      await flushPromises();
+
+      expect(getPioneroLiveKitAgentAudio).toHaveBeenCalledTimes(1);
+      expect(playback.play).toHaveBeenCalledTimes(1);
+    } finally {
+      playback.restore();
+    }
+  });
+
+  it("stops the agent audio retry loop when the Pionero room disconnects", async () => {
+    vi.useFakeTimers();
+    const playback = stubAgentAudioPlayback();
+    let unmount = () => {};
+
+    try {
+      const createPioneroLiveKitSession = vi
+        .fn()
+        .mockResolvedValue(buildSession());
+      const startPioneroLiveKitAgentPlan = vi
+        .fn()
+        .mockResolvedValue(buildAgentPlan());
+      const stopPioneroLiveKitAgentPlan = vi
+        .fn()
+        .mockResolvedValue(buildAgentPlan({ status: "stopped" }));
+      const getPioneroLiveKitAgentStatus = vi.fn().mockResolvedValue(
+        buildSynthesizedAgentPlan()
+      );
+      const getPioneroLiveKitAgentAudio = vi
+        .fn()
+        .mockRejectedValue(buildAgentAudioNotFoundError());
+      mockLiveKit.createLocalAudioTrack.mockResolvedValue({ stop: vi.fn() });
+
+      const rendered = renderHook(() =>
+        usePioneroLiveKitRoom({
+          createPioneroLiveKitSession,
+          getPioneroLiveKitAgentAudio,
+          getPioneroLiveKitAgentStatus,
+          startPioneroLiveKitAgentPlan,
+          stopPioneroLiveKitAgentPlan,
+        })
+      );
+      unmount = rendered.unmount;
+
+      await act(async () => {
+        await rendered.result.current.connect();
+      });
+
+      await act(async () => {
+        await rendered.result.current.refreshAgentStatus();
+      });
+      await flushPromises();
+
+      expect(getPioneroLiveKitAgentAudio).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        await rendered.result.current.disconnect();
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2_000);
+      });
+      await flushPromises();
+
+      expect(getPioneroLiveKitAgentAudio).toHaveBeenCalledTimes(1);
+      expect(playback.play).not.toHaveBeenCalled();
+      expect(rendered.result.current.agentAudioPlaybackStatus).toBe("idle");
+    } finally {
+      unmount();
+      vi.clearAllTimers();
+      vi.useRealTimers();
+      playback.restore();
     }
   });
 
