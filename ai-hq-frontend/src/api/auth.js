@@ -19,7 +19,7 @@ export async function loginUser({
       tenantKey,
       accountSelectionToken,
     },
-    { timeoutMs: AUTH_ACTION_TIMEOUT_MS }
+    { authProtected: false, timeoutMs: AUTH_ACTION_TIMEOUT_MS }
   );
 }
 
@@ -41,7 +41,7 @@ export async function signupUser({
       tenantKey,
       websiteUrl,
     },
-    { timeoutMs: AUTH_ACTION_TIMEOUT_MS }
+    { authProtected: false, timeoutMs: AUTH_ACTION_TIMEOUT_MS }
   );
 }
 
@@ -56,7 +56,7 @@ export async function verifyEmail(input) {
   return apiPost(
     "/api/auth/verify-email",
     payload,
-    { timeoutMs: AUTH_ACTION_TIMEOUT_MS }
+    { authProtected: false, timeoutMs: AUTH_ACTION_TIMEOUT_MS }
   );
 }
 
@@ -64,7 +64,7 @@ export async function resendVerificationEmail() {
   return apiPost(
     "/api/auth/resend-verification",
     {},
-    { timeoutMs: AUTH_ACTION_TIMEOUT_MS }
+    { authProtected: false, timeoutMs: AUTH_ACTION_TIMEOUT_MS }
   );
 }
 
@@ -82,12 +82,15 @@ export async function selectWorkspaceUser({
       tenantKey,
       accountSelectionToken,
     },
-    { timeoutMs: AUTH_ACTION_TIMEOUT_MS }
+    { authProtected: false, timeoutMs: AUTH_ACTION_TIMEOUT_MS }
   );
 }
 
 export async function logoutUser() {
-  return apiPost("/api/auth/logout", {}, { timeoutMs: AUTH_ACTION_TIMEOUT_MS });
+  return apiPost("/api/auth/logout", {}, {
+    authProtected: false,
+    timeoutMs: AUTH_ACTION_TIMEOUT_MS,
+  });
 }
 
 export async function switchWorkspaceUser({ switchToken }) {
@@ -105,11 +108,14 @@ export async function getAuthMe(options = {}) {
     allowStatuses: [401, 503],
     timeoutMs: AUTH_SESSION_TIMEOUT_MS,
     ...options,
+    authProtected: false,
   });
 }
 
 export async function getAdminAuthMe() {
   return apiGet("/api/admin-auth/me", {
+    allowStatuses: [401, 503],
+    authProtected: false,
     timeoutMs: AUTH_SESSION_TIMEOUT_MS,
   });
 }
@@ -118,10 +124,13 @@ export async function loginAdminAuth(passcode) {
   return apiPost(
     "/api/admin-auth/login",
     { passcode },
-    { timeoutMs: AUTH_ACTION_TIMEOUT_MS }
+    { authProtected: false, timeoutMs: AUTH_ACTION_TIMEOUT_MS }
   );
 }
 
 export async function logoutAdminAuth() {
-  return apiPost("/api/admin-auth/logout", {}, { timeoutMs: AUTH_ACTION_TIMEOUT_MS });
+  return apiPost("/api/admin-auth/logout", {}, {
+    authProtected: false,
+    timeoutMs: AUTH_ACTION_TIMEOUT_MS,
+  });
 }

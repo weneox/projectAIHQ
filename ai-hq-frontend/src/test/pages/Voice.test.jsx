@@ -1,13 +1,40 @@
 import { render } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import Voice from "../../pages/Voice.jsx";
+import { apiPost } from "../../api/client.js";
+import {
+  normalizeBrowserSpeechSynthesisResult,
+  synthesizeBrowserSpeech,
+  transcribeBrowserSpeech,
+} from "../../api/voice.js";
 import {
   linkBrowserVoiceRealtimeSessionFromSdpResponse,
   normalizeRealtimeProviderCallId,
+  playBrowserVoiceSpeechAudio,
+  readBrowserVoiceSpeechBridgeAudioBase64,
+  readBrowserVoiceSpeechBridgeText,
 } from "../../pages/hooks/useBrowserVoiceCall.js";
+import {
+  arrayBufferToBase64,
+  blobToBrowserSpeechPayload,
+  createBrowserSpeechMediaRecorder,
+  isBrowserSpeechRecordingSupported,
+  pickBrowserSpeechMimeType,
+  stopBrowserSpeechStream,
+  transcribeBrowserAudioBlob,
+} from "../../pages/hooks/useBrowserSpeechBridge.js";
+
+vi.mock("../../api/client.js", () => ({
+  apiGet: vi.fn(),
+  apiPost: vi.fn(),
+}));
 
 describe("Voice", () => {
+  beforeEach(() => {
+    apiPost.mockReset();
+  });
+
   it("stays intentionally stripped while this legacy surface is frozen for v1", () => {
     const { container } = render(<Voice />);
     expect(container.innerHTML).toBe("");
@@ -116,4 +143,186 @@ describe("Voice", () => {
       )
     ).toBe("rtc_full_url");
   });
+  it("posts browser speech bridge API requests", async () => {
+    apiPost
+      .mockResolvedValueOnce({
+        ok: true,
+        version: "voice_speech_browser_bridge.v1",
+        stage: "stt",
+        text: "Salam",
+        result: {
+          ok: true,
+          text: "Salam",
+        },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        version: "voice_speech_browser_bridge.v1",
+        stage: "tts",
+        result: {
+          ok: true,
+          audioBase64: "ZmFrZS1hdWRpbw==",
+          audioByteLength: 10,
+          audioEncoding: "base64",
+        },
+      });
+
+    const transcript = await transcribeBrowserSpeech({
+      audioBase64: "ZmFrZS1hdWRpbw==",
+      encoding: "base64",
+      finalize: true,
+    });
+
+    expect(transcript.text).toBe("Salam");
+    expect(apiPost).toHaveBeenNthCalledWith(1, "/api/voice/speech/browser/transcribe", {
+      audioBase64: "ZmFrZS1hdWRpbw==",
+      encoding: "base64",
+      finalize: true,
+    });
+
+    const speech = await synthesizeBrowserSpeech({
+      text: "Oldu.",
+      streamId: "stream-test",
+    });
+
+    expect(speech.result.audioBase64).toBe("ZmFrZS1hdWRpbw==");
+    expect(speech.result.audioByteLength).toBe(10);
+    expect(speech.result.audioEncoding).toBe("base64");
+    expect(apiPost).toHaveBeenNthCalledWith(2, "/api/voice/speech/browser/synthesize", {
+      text: "Oldu.",
+      streamId: "stream-test",
+    });
+  });
+
+  it("fails closed before browser speech bridge API calls when required input is missing", async () => {
+    await expect(transcribeBrowserSpeech({})).rejects.toThrow("audio is required");
+    await expect(synthesizeBrowserSpeech({})).rejects.toThrow("text is required");
+
+    expect(normalizeBrowserSpeechSynthesisResult({}).audioEncoding).toBe("base64");
+    expect(apiPost).not.toHaveBeenCalled();
+  });
+
+  it("converts browser audio blobs into speech bridge payloads", async () => {
+    const blob = new Blob(["fake-audio"], { type: "audio/webm" });
+    const payload = await blobToBrowserSpeechPayload(blob, { finalize: false });
+
+    expect(payload.audioBase64).toBe("ZmFrZS1hdWRpbw==");
+    expect(payload.encoding).toBe("base64");
+    expect(payload.mimeType).toBe("audio/webm");
+    expect(payload.audioByteLength).toBe(10);
+    expect(payload.finalize).toBe(false);
+
+    expect(arrayBufferToBase64(new TextEncoder().encode("ok"))).toBe("b2s=");
+  });
+
+  it("transcribes browser audio blobs through an injected speech client", async () => {
+    const transcribe = vi.fn().mockResolvedValue({
+      ok: true,
+      text: "Salam",
+    });
+
+    const result = await transcribeBrowserAudioBlob(
+      new Blob(["fake-audio"], { type: "audio/webm" }),
+      { finalize: true },
+      transcribe
+    );
+
+    expect(result.text).toBe("Salam");
+    expect(transcribe).toHaveBeenCalledTimes(1);
+    expect(transcribe.mock.calls[0][0]).toEqual({
+      audioBase64: "ZmFrZS1hdWRpbw==",
+      encoding: "base64",
+      mimeType: "audio/webm",
+      audioByteLength: 10,
+      finalize: true,
+    });
+  });
+
+  it("builds browser media recorder sessions with supported audio mime types", async () => {
+    const stopTrack = vi.fn();
+    const stream = {
+      getTracks: () => [{ stop: stopTrack }],
+    };
+    const getUserMedia = vi.fn().mockResolvedValue(stream);
+
+    function FakeMediaRecorder(nextStream, options) {
+      this.stream = nextStream;
+      this.options = options;
+      this.state = "inactive";
+      this.start = vi.fn();
+      this.stop = vi.fn();
+    }
+
+    FakeMediaRecorder.isTypeSupported = vi.fn((mimeType) => mimeType === "audio/webm");
+
+    expect(
+      isBrowserSpeechRecordingSupported({
+        navigatorRef: { mediaDevices: { getUserMedia } },
+        mediaRecorderCtor: FakeMediaRecorder,
+      })
+    ).toBe(true);
+
+    expect(
+      pickBrowserSpeechMimeType(FakeMediaRecorder, ["audio/mp4", "audio/webm"])
+    ).toBe("audio/webm");
+
+    const session = await createBrowserSpeechMediaRecorder({
+      navigatorRef: { mediaDevices: { getUserMedia } },
+      mediaRecorderCtor: FakeMediaRecorder,
+      candidates: ["audio/mp4", "audio/webm"],
+    });
+
+    expect(getUserMedia).toHaveBeenCalledWith({ audio: true });
+    expect(session.mimeType).toBe("audio/webm");
+    expect(session.stream).toBe(stream);
+    expect(session.recorder.options).toEqual({ mimeType: "audio/webm" });
+
+    expect(stopBrowserSpeechStream(stream)).toBe(1);
+    expect(stopTrack).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails closed when browser media recorder dependencies are unavailable", async () => {
+    expect(
+      isBrowserSpeechRecordingSupported({
+        navigatorRef: {},
+        mediaRecorderCtor: null,
+      })
+    ).toBe(false);
+
+    await expect(
+      createBrowserSpeechMediaRecorder({
+        navigatorRef: {},
+        mediaRecorderCtor: function FakeMediaRecorder() {},
+      })
+    ).rejects.toThrow("browser microphone is unavailable");
+
+    await expect(
+      createBrowserSpeechMediaRecorder({
+        navigatorRef: {
+          mediaDevices: {
+            getUserMedia: vi.fn(),
+          },
+        },
+        mediaRecorderCtor: null,
+      })
+    ).rejects.toThrow("MediaRecorder is unavailable");
+  });
+
+  it("normalizes browser voice speech bridge payloads safely", async () => {
+    expect(readBrowserVoiceSpeechBridgeText({ text: "Salam" })).toBe("Salam");
+    expect(readBrowserVoiceSpeechBridgeText({ result: { text: "Oldu" } })).toBe("Oldu");
+    expect(
+      readBrowserVoiceSpeechBridgeAudioBase64({
+        result: {
+          audioBase64: "ZmFrZS1hdWRpbw==",
+        },
+      })
+    ).toBe("ZmFrZS1hdWRpbw==");
+
+    expect(await playBrowserVoiceSpeechAudio("")).toEqual({
+      ok: false,
+      reasonCode: "browser_speech_audio_missing",
+    });
+  });
+
 });

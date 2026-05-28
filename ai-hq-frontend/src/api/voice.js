@@ -123,6 +123,72 @@ export async function executeBrowserVoiceTool(callId, body = {}) {
   return apiPost(`/api/voice/browser/calls/${encodeURIComponent(callId)}/tools`, body);
 }
 
+
+function hasBrowserSpeechAudioInput(body = {}) {
+  return (
+    Boolean(body?.audioBase64) ||
+    Boolean(body?.audioChunk) ||
+    Boolean(body?.audio) ||
+    (Array.isArray(body?.audioChunks) && body.audioChunks.length > 0)
+  );
+}
+
+export function normalizeBrowserSpeechSynthesisResult(result = {}) {
+  const payload = result && typeof result === "object" && !Array.isArray(result)
+    ? result
+    : {};
+
+  return {
+    ...payload,
+    audioBase64: String(payload.audioBase64 || ""),
+    audioByteLength: Number(payload.audioByteLength || 0),
+    audioEncoding: String(payload.audioEncoding || "base64"),
+  };
+}
+
+export async function createPioneroLiveKitSession(body = {}) {
+  return apiPost("/api/voice/pionero/livekit/token", body);
+}
+
+export async function startPioneroLiveKitAgentPlan(body = {}) {
+  return apiPost("/api/voice/pionero/livekit/agent/start-plan", body);
+}
+
+export async function getPioneroLiveKitAgentStatus(params = {}) {
+  return apiGet(`/api/voice/pionero/livekit/agent/status${qs(params)}`);
+}
+
+export async function stopPioneroLiveKitAgentPlan(body = {}) {
+  return apiPost("/api/voice/pionero/livekit/agent/stop-plan", body);
+}
+
+export async function getVoiceSpeechGatewayReadiness(params = {}) {
+  return apiGet(`/api/voice/speech/gateway/readiness${qs(params)}`);
+}
+
+export async function transcribeBrowserSpeech(body = {}) {
+  if (!hasBrowserSpeechAudioInput(body)) {
+    throw new Error("audio is required");
+  }
+
+  return apiPost("/api/voice/speech/browser/transcribe", body);
+}
+
+export async function synthesizeBrowserSpeech(body = {}) {
+  const text = String(body?.text || body?.responseText || "").trim();
+
+  if (!text) {
+    throw new Error("text is required");
+  }
+
+  const response = await apiPost("/api/voice/speech/browser/synthesize", body);
+
+  return {
+    ...response,
+    result: normalizeBrowserSpeechSynthesisResult(response?.result),
+  };
+}
+
 export async function listVoiceChannels(params = {}) {
   const j = await apiGet(`/api/voice/channels${qs(params)}`);
   return {

@@ -1,14 +1,16 @@
-import { randomUUID } from "crypto";
+import {
+  randomUUID } from "crypto";
 import express from "express";
+import { AccessToken } from "livekit-server-sdk";
 import {
   requireOperatorSurfaceAccess,
-} from "../../../utils/auth.js";
+  } from "../../../utils/auth.js";
 import {
   createLogger,
-} from "../../../utils/logger.js";
+  } from "../../../utils/logger.js";
 import {
   recordRuntimeSignal,
-} from "../../../observability/runtimeSignals.js";
+  } from "../../../observability/runtimeSignals.js";
 import {
   s,
   n,
@@ -16,7 +18,7 @@ import {
   fail,
   getActor,
   isLiveVoiceStatus,
-} from "./shared.js";
+  } from "./shared.js";
 import {
   getTenantVoiceSettings,
   upsertTenantVoiceSettings,
@@ -27,17 +29,17 @@ import {
   createVoiceCall,
   updateVoiceCallForTenant,
   resolveTenantScope,
-} from "./repository.js";
+  } from "./repository.js";
 import {
   requireTenantScope,
   normalizeSettingsInput,
   getScopedCallOrFail,
   getScopedSessionOrFail,
   auditSafe,
-} from "./utils.js";
+  } from "./utils.js";
 import {
   getTenantBrainRuntime,
-} from "../../../services/businessBrain/getTenantBrainRuntime.js";
+  } from "../../../services/businessBrain/getTenantBrainRuntime.js";
 import {
   isMissingSchemaError,
   getSessionCallId,
@@ -55,6 +57,14 @@ import {
   processVoiceTenantConfig,
   buildBusinessActionRecordedVoiceEventPayload,
   createBusinessActionSinkRegistry,
+  buildVoiceSpeechGatewayPlan,
+  createVoiceSpeechGateway,
+  buildSonioxSpeechRuntimeConfig,
+  createSonioxSpeechAdapter,
+  buildPioneroLiveKitAgentPlan,
+  getPioneroLiveKitAgentRuntimeState,
+  startPioneroLiveKitAgentRuntime,
+  stopPioneroLiveKitAgentRuntime,
 } from "../../../modules/voice/index.js";
 import {
   createVoiceBusinessActionInboxSinkExecutor,
@@ -922,7 +932,7 @@ async function handleBrowserVoiceRealtimeLink(
     dbDisabled = false,
     getRuntime = getTenantBrainRuntime,
     startSidebandRunner = startRealtimeSidebandSocketRunner,
-    wsHub = null,
+wsHub = null,
   } = {}
 ) {
   const logger = getRouteLogger(req, "voice.browser.realtime_link");
@@ -1746,6 +1756,597 @@ async function handleVoiceOperatorAction(
   }
 }
 
+
+const PIONERO_LIVEKIT_TOKEN_VERSION = "pionero_livekit_token.v1";
+
+function cleanLiveKitName(value = "", fallback = "pionero") {
+  const clean = s(value, fallback)
+    .replace(/[^a-zA-Z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 96);
+
+  return clean || fallback;
+}
+
+function readLiveKitConfig(env = process.env) {
+  return {
+    url: s(env.LIVEKIT_URL || env.LIVEKIT_WS_URL || env.VITE_LIVEKIT_URL),
+    apiKey: s(env.LIVEKIT_API_KEY),
+    apiSecret: s(env.LIVEKIT_API_SECRET),
+  };
+}
+
+function buildPioneroLiveKitRoomName(req = {}) {
+  const requestedRoom = s(req.body?.roomName || req.query?.roomName);
+
+  if (requestedRoom) {
+    return cleanLiveKitName(requestedRoom, "pionero-room");
+  }
+
+  const tenantKey = cleanLiveKitName(req.auth?.tenantKey || req.auth?.tenantId, "tenant");
+  const suffix = cleanLiveKitName(randomUUID().slice(0, 8), "session");
+
+  return `aihq-pionero-${tenantKey}-${suffix}`;
+}
+
+async function handlePioneroLiveKitToken(req, res) {
+  const logger = getRouteLogger(req, "voice.pionero.livekit.token");
+
+  try {
+    const config = readLiveKitConfig(process.env);
+
+    if (!config.url || !config.apiKey || !config.apiSecret) {
+      return fail(res, 503, "livekit_config_missing", {
+        version: PIONERO_LIVEKIT_TOKEN_VERSION,
+        configured: false,
+        missing: {
+          url: !config.url,
+          apiKey: !config.apiKey,
+          apiSecret: !config.apiSecret,
+        },
+      });
+    }
+
+    const roomName = buildPioneroLiveKitRoomName(req);
+    const identity = cleanLiveKitName(
+      req.body?.identity || req.auth?.userId || getActor(req) || randomUUID(),
+      "operator"
+    );
+    const participantName = s(req.body?.name || getActor(req), identity);
+
+    const token = new AccessToken(config.apiKey, config.apiSecret, {
+      identity,
+      name: participantName,
+      ttl: "10m",
+    });
+
+    token.addGrant({
+      room: roomName,
+      roomJoin: true,
+      canPublish: true,
+      canSubscribe: true,
+      canPublishData: true,
+    });
+
+    return ok(res, {
+      version: PIONERO_LIVEKIT_TOKEN_VERSION,
+      provider: "livekit",
+      configured: true,
+      url: config.url,
+      roomName,
+      identity,
+      token: await token.toJwt(),
+      expiresInSeconds: 600,
+      mode: "pionero_realtime_agent",
+      pipeline: {
+        transport: "livekit",
+        stt: "soniox",
+        llm: "fast_text_llm",
+        tts: "cartesia",
+      },
+    });
+  } catch (err) {
+    logger.error("voice.pionero.livekit.token.failed", err);
+    recordVoiceRouteFailure({
+      route: "voice.pionero.livekit.token",
+      reasonCode: "pionero_livekit_token_failed",
+      err,
+      req,
+    });
+    return fail(res, 500, "pionero_livekit_token_failed");
+  }
+}
+
+async function handlePioneroLiveKitAgentPlan(req, res) {
+  const logger = getRouteLogger(req, "voice.pionero.livekit.agent.plan");
+
+  try {
+    return ok(res, buildPioneroLiveKitAgentPlan({
+      roomName: req.query?.roomName,
+    }));
+  } catch (err) {
+    logger.error("voice.pionero.livekit.agent.plan.failed", err);
+    recordVoiceRouteFailure({
+      route: "voice.pionero.livekit.agent.plan",
+      reasonCode: "pionero_livekit_agent_plan_failed",
+      err,
+      req,
+    });
+    return fail(res, 500, "pionero_livekit_agent_plan_failed");
+  }
+}
+
+function readPioneroLiveKitRoomClient(value = null) {
+  if (typeof value === "function") {
+    return {
+      RoomClass: value,
+      RoomEvent: value.RoomEvent || null,
+      AudioStream: value.AudioStream || null,
+      TrackKind: value.TrackKind || null,
+      TrackSource: value.TrackSource || null,
+    };
+  }
+
+  if (value && typeof value === "object") {
+    return {
+      RoomClass: typeof value.RoomClass === "function"
+        ? value.RoomClass
+        : typeof value.Room === "function"
+          ? value.Room
+          : null,
+      RoomEvent: value.RoomEvent || null,
+      AudioStream: value.AudioStream || null,
+      TrackKind: value.TrackKind || null,
+      TrackSource: value.TrackSource || null,
+    };
+  }
+
+  return {
+    RoomClass: null,
+    RoomEvent: null,
+    AudioStream: null,
+    TrackKind: null,
+    TrackSource: null,
+  };
+}
+
+async function readPioneroLiveKitRouteRoomClient({
+  req,
+  roomName = "",
+  logger = null,
+  pioneroLiveKitRoomClassFactory = null,
+} = {}) {
+  if (typeof pioneroLiveKitRoomClassFactory !== "function") {
+      return {
+        RoomClass: null,
+        RoomEvent: null,
+        AudioStream: null,
+        TrackKind: null,
+        TrackSource: null,
+      };
+    }
+
+  try {
+    const roomClient = await pioneroLiveKitRoomClassFactory({
+      req,
+      roomName,
+      logger,
+    });
+
+    return readPioneroLiveKitRoomClient(roomClient);
+    } catch (err) {
+      logger?.warn?.("voice.pionero.livekit.agent.room_class_factory_failed", {
+        reasonCode: "pionero_livekit_room_class_factory_failed",
+        error: null,
+      });
+
+      return {
+        RoomClass: null,
+        RoomEvent: null,
+        AudioStream: null,
+        TrackKind: null,
+        TrackSource: null,
+      };
+    }
+  }
+
+async function handlePioneroLiveKitAgentStartPlan(
+  req,
+  res,
+  { pioneroLiveKitRoomClassFactory = null } = {}
+) {
+  const logger = getRouteLogger(req, "voice.pionero.livekit.agent.start_plan");
+
+  try {
+    const roomName = req.body?.roomName || req.query?.roomName;
+    const {
+      RoomClass,
+      RoomEvent,
+      AudioStream,
+      TrackKind,
+      TrackSource,
+    } = await readPioneroLiveKitRouteRoomClient({
+      req,
+      roomName,
+      logger,
+      pioneroLiveKitRoomClassFactory,
+    });
+    const state = await startPioneroLiveKitAgentRuntime({
+      roomName,
+      logger,
+      ...(RoomClass ? { RoomClass } : {}),
+      ...(RoomEvent ? { RoomEvent } : {}),
+      ...(AudioStream ? { AudioStream } : {}),
+      ...(TrackKind ? { TrackKind } : {}),
+      ...(TrackSource ? { TrackSource } : {}),
+    });
+
+    return ok(res, state);
+  } catch (err) {
+    logger.error("voice.pionero.livekit.agent.start_plan.failed", err);
+    recordVoiceRouteFailure({
+      route: "voice.pionero.livekit.agent.start_plan",
+      reasonCode: "pionero_livekit_agent_start_plan_failed",
+      err,
+      req,
+    });
+    return fail(res, 500, "pionero_livekit_agent_start_plan_failed");
+  }
+}
+
+async function handlePioneroLiveKitAgentStatus(req, res) {
+  const logger = getRouteLogger(req, "voice.pionero.livekit.agent.status");
+
+  try {
+    const roomName = req.query?.roomName || req.body?.roomName;
+    const state = getPioneroLiveKitAgentRuntimeState({ roomName });
+
+    if (!state) {
+      return fail(res, 404, "pionero_agent_runtime_not_found", {
+        reasonCode: "pionero_agent_runtime_not_found",
+        roomName: s(roomName),
+      });
+    }
+
+    return ok(res, state);
+  } catch (err) {
+    logger.error("voice.pionero.livekit.agent.status.failed", err);
+    recordVoiceRouteFailure({
+      route: "voice.pionero.livekit.agent.status",
+      reasonCode: "pionero_livekit_agent_status_failed",
+      err,
+      req,
+    });
+    return fail(res, 500, "pionero_livekit_agent_status_failed");
+  }
+}
+
+async function handlePioneroLiveKitAgentStopPlan(req, res) {
+  const logger = getRouteLogger(req, "voice.pionero.livekit.agent.stop_plan");
+
+  try {
+    const roomName = req.body?.roomName || req.query?.roomName;
+    const state = await stopPioneroLiveKitAgentRuntime({ roomName });
+
+    if (!state) {
+      return fail(res, 404, "pionero_agent_runtime_not_found", {
+        reasonCode: "pionero_agent_runtime_not_found",
+        roomName: s(roomName),
+      });
+    }
+
+    return ok(res, state);
+  } catch (err) {
+    logger.error("voice.pionero.livekit.agent.stop_plan.failed", err);
+    recordVoiceRouteFailure({
+      route: "voice.pionero.livekit.agent.stop_plan",
+      reasonCode: "pionero_livekit_agent_stop_plan_failed",
+      err,
+      req,
+    });
+    return fail(res, 500, "pionero_livekit_agent_stop_plan_failed");
+  }
+}
+
+function readVoiceSpeechGatewayOverrides(req = {}) {
+  const query = obj(req.query);
+  const body = obj(req.body);
+
+  return {
+    transport: s(query.transport || body.transport),
+    sttProvider: s(
+      query.sttProvider ||
+        query.stt ||
+        query.asrProvider ||
+        body.sttProvider ||
+        body.stt ||
+        body.asrProvider
+    ),
+    ttsProvider: s(
+      query.ttsProvider ||
+        query.tts ||
+        body.ttsProvider ||
+        body.tts
+    ),
+    language: s(query.language || query.locale || body.language || body.locale),
+    agentMode: s(query.agentMode || body.agentMode),
+    llmProvider: s(query.llmProvider || body.llmProvider),
+    ttsVoice: s(query.voice || query.ttsVoice || body.voice || body.ttsVoice),
+  };
+}
+
+function compactVoiceSpeechGatewayPlan(plan = {}) {
+  const providerConfig = obj(plan.providerConfig);
+  const speechPipeline = obj(plan.speechPipeline);
+  const readiness = obj(plan.readiness);
+
+  return {
+    version: s(plan.version),
+    providerAgnostic: plan.providerAgnostic === true,
+    mode: s(plan.mode),
+    networkIo: plan.networkIo === true,
+    transport: s(plan.transport),
+    language: s(plan.language),
+    providers: {
+      stt: s(providerConfig.stt?.provider),
+      tts: s(providerConfig.tts?.provider),
+      llm: s(providerConfig.llm?.provider),
+    },
+    adapters: obj(plan.adapters),
+    readiness,
+    speechPipeline: {
+      version: s(speechPipeline.version),
+      mode: s(speechPipeline.mode),
+      language: s(speechPipeline.language),
+      asr: obj(speechPipeline.asr),
+      tts: obj(speechPipeline.tts),
+      compatibility: obj(speechPipeline.compatibility),
+    },
+    stages: Array.isArray(plan.stages) ? plan.stages : [],
+  };
+}
+
+async function handleVoiceSpeechGatewayReadiness(
+  req,
+  res,
+  { db, dbDisabled = false, getRuntime = getTenantBrainRuntime } = {}
+) {
+  const logger = getRouteLogger(req, "voice.speech.gateway.readiness");
+
+  try {
+    let scope = null;
+    let runtimeConfig = {};
+    let runtimeApplied = false;
+    let runtimeReasonCode = "";
+
+    if (!dbDisabled && db) {
+      scope = await requireTenantScope(req, res, db);
+      if (!scope) return;
+
+      try {
+        const runtimeResult = await processVoiceTenantConfig({
+          db,
+          tenantKey: scope.tenantKey,
+          toNumber: s(req.query?.toNumber || req.body?.toNumber || "browser"),
+          provider: s(req.query?.provider || req.body?.provider || "browser"),
+          getRuntime,
+        });
+
+        if (runtimeResult?.ok === true) {
+          runtimeApplied = true;
+          runtimeConfig = readBrowserVoiceConfigPayload(runtimeResult);
+        } else {
+          runtimeReasonCode = s(
+            runtimeResult?.error ||
+              runtimeResult?.details?.reasonCode ||
+              "voice_runtime_unavailable"
+          );
+        }
+      } catch (runtimeErr) {
+        runtimeReasonCode = "voice_runtime_resolution_failed";
+        logger.warn("voice.speech.gateway.runtime_unavailable", {
+          error: s(runtimeErr?.message || runtimeErr),
+        });
+      }
+    } else {
+      runtimeReasonCode = "db_unavailable";
+    }
+
+    const overrides = readVoiceSpeechGatewayOverrides(req);
+    const gatewayPlan = buildVoiceSpeechGatewayPlan({
+      env: process.env,
+      runtimeConfig,
+      overrides,
+      requestedVoice: overrides.ttsVoice,
+    });
+
+    const sonioxRuntime = buildSonioxSpeechRuntimeConfig({
+      env: process.env,
+      overrides: {
+        language: overrides.language,
+        voice: overrides.ttsVoice,
+      },
+    });
+
+    const sonioxAdapter = createSonioxSpeechAdapter({
+      runtimeConfig: sonioxRuntime,
+    });
+
+    return ok(res, {
+      version: "voice_speech_gateway_readiness.v1",
+      runtimeApplied,
+      runtimeReasonCode,
+      tenantKey: s(scope?.tenantKey),
+      tenantId: s(scope?.tenantId),
+      gateway: compactVoiceSpeechGatewayPlan(gatewayPlan),
+      soniox: {
+        provider: "soniox",
+        configured: sonioxAdapter.configured === true,
+        reasonCode: s(sonioxAdapter.reasonCode),
+        networkIo: sonioxAdapter.networkIo === true,
+        stt: sonioxAdapter.buildSttConnectionPlan(),
+        tts: sonioxAdapter.buildTtsConnectionPlan(),
+      },
+    });
+  } catch (err) {
+    logger.error("voice.speech.gateway.readiness.failed", err);
+    recordVoiceRouteFailure({
+      route: "voice.speech.gateway.readiness",
+      reasonCode: "voice_speech_gateway_readiness_failed",
+      err,
+      req,
+    });
+    return fail(res, 500, "voice_speech_gateway_readiness_failed");
+  }
+}
+
+
+function readBrowserSpeechAudioChunks(input = {}) {
+  const body = obj(input);
+  const rawChunks = Array.isArray(body.audioChunks)
+    ? body.audioChunks
+    : [
+        body.audioChunk,
+        body.audio,
+        body.audioBase64,
+      ].filter((chunk) => chunk !== undefined && chunk !== null);
+
+  return rawChunks
+    .map((chunk) => {
+      if (Buffer.isBuffer(chunk)) return chunk;
+
+      if (chunk instanceof Uint8Array) {
+        return Buffer.from(chunk);
+      }
+
+      if (Array.isArray(chunk)) {
+        return Buffer.from(chunk);
+      }
+
+      if (chunk && typeof chunk === "object") {
+        if (typeof chunk.base64 === "string") {
+          return Buffer.from(chunk.base64, "base64");
+        }
+
+        if (Array.isArray(chunk.bytes)) {
+          return Buffer.from(chunk.bytes);
+        }
+      }
+
+      if (typeof chunk === "string") {
+        const encoding = s(body.encoding || body.audioEncoding);
+        return Buffer.from(chunk, encoding === "base64" ? "base64" : "utf8");
+      }
+
+      return null;
+    })
+    .filter((chunk) => Buffer.isBuffer(chunk) && chunk.byteLength > 0);
+}
+
+function compactSpeechBridgeResult(result = {}) {
+  const payload = obj(result);
+  const audio = Buffer.isBuffer(payload.audio) ? payload.audio : null;
+  const { audio: _audio, ...safePayload } = payload;
+
+  if (!audio) {
+    return safePayload;
+  }
+
+  return {
+    ...safePayload,
+    audioBase64: audio.toString("base64"),
+    audioByteLength: Number(payload.audioByteLength || audio.byteLength || 0),
+    audioEncoding: "base64",
+  };
+}
+
+function createRouteVoiceSpeechGateway(req, speechGatewayFactory = createVoiceSpeechGateway) {
+  const overrides = readVoiceSpeechGatewayOverrides(req);
+
+  return speechGatewayFactory({
+    env: process.env,
+    overrides,
+    requestedVoice: overrides.ttsVoice,
+  });
+}
+
+async function handleVoiceSpeechBrowserTranscribe(
+  req,
+  res,
+  { speechGatewayFactory = createVoiceSpeechGateway } = {}
+) {
+  const logger = getRouteLogger(req, "voice.speech.browser.transcribe");
+
+  try {
+    const audioChunks = readBrowserSpeechAudioChunks(req.body || {});
+
+    if (audioChunks.length === 0) {
+      return fail(res, 400, "voice_speech_audio_missing");
+    }
+
+    const gateway = createRouteVoiceSpeechGateway(req, speechGatewayFactory);
+    const result = await gateway.transcribeAudioChunk({
+      audioChunks,
+      finalize: req.body?.finalize !== false,
+    });
+
+    return ok(res, {
+      version: "voice_speech_browser_bridge.v1",
+      provider: s(result?.provider),
+      stage: "stt",
+      result: compactSpeechBridgeResult(result),
+      text: s(result?.text),
+    });
+  } catch (err) {
+    logger.error("voice.speech.browser.transcribe.failed", err);
+    recordVoiceRouteFailure({
+      route: "voice.speech.browser.transcribe",
+      reasonCode: "voice_speech_browser_transcribe_failed",
+      err,
+      req,
+    });
+    return fail(res, 500, "voice_speech_browser_transcribe_failed");
+  }
+}
+
+async function handleVoiceSpeechBrowserSynthesize(
+  req,
+  res,
+  { speechGatewayFactory = createVoiceSpeechGateway } = {}
+) {
+  const logger = getRouteLogger(req, "voice.speech.browser.synthesize");
+
+  try {
+    const text = s(req.body?.text || req.body?.responseText);
+
+    if (!text) {
+      return fail(res, 400, "voice_speech_text_missing");
+    }
+
+    const gateway = createRouteVoiceSpeechGateway(req, speechGatewayFactory);
+    const result = await gateway.synthesizeSpeech({
+      text,
+      streamId: s(req.body?.streamId || req.body?.stream_id),
+    });
+
+    return ok(res, {
+      version: "voice_speech_browser_bridge.v1",
+      provider: s(result?.provider),
+      stage: "tts",
+      result: compactSpeechBridgeResult(result),
+    });
+  } catch (err) {
+    logger.error("voice.speech.browser.synthesize.failed", err);
+    recordVoiceRouteFailure({
+      route: "voice.speech.browser.synthesize",
+      reasonCode: "voice_speech_browser_synthesize_failed",
+      err,
+      req,
+    });
+    return fail(res, 500, "voice_speech_browser_synthesize_failed");
+  }
+}
+
 async function handleVoiceActionRuntimePreview(
   req,
   res,
@@ -1812,8 +2413,33 @@ export function voiceRoutes({
   wsHub = null,
   getRuntime = getTenantBrainRuntime,
   startSidebandRunner = startRealtimeSidebandSocketRunner,
+  speechGatewayFactory = createVoiceSpeechGateway,
+  pioneroLiveKitRoomClassFactory = null,
 } = {}) {
   const r = express.Router();
+
+
+  r.post("/voice/pionero/livekit/token", requireOperatorSurfaceAccess, (req, res) =>
+    handlePioneroLiveKitToken(req, res)
+  );
+
+  r.get("/voice/pionero/livekit/agent/plan", requireOperatorSurfaceAccess, (req, res) =>
+    handlePioneroLiveKitAgentPlan(req, res)
+  );
+
+  r.post("/voice/pionero/livekit/agent/start-plan", requireOperatorSurfaceAccess, (req, res) =>
+    handlePioneroLiveKitAgentStartPlan(req, res, {
+      pioneroLiveKitRoomClassFactory,
+    })
+  );
+
+  r.get("/voice/pionero/livekit/agent/status", requireOperatorSurfaceAccess, (req, res) =>
+    handlePioneroLiveKitAgentStatus(req, res)
+  );
+
+  r.post("/voice/pionero/livekit/agent/stop-plan", requireOperatorSurfaceAccess, (req, res) =>
+    handlePioneroLiveKitAgentStopPlan(req, res)
+  );
 
   r.get("/settings/voice", requireOperatorSurfaceAccess, (req, res) =>
     handleSettingsGet(req, res, { db, dbDisabled })
@@ -1870,6 +2496,19 @@ export function voiceRoutes({
     handleVoiceActionRuntimePreview(req, res, { db, dbDisabled, getRuntime })
   );
 
+
+
+  r.get("/voice/speech/gateway/readiness", requireOperatorSurfaceAccess, (req, res) =>
+    handleVoiceSpeechGatewayReadiness(req, res, { db, dbDisabled, getRuntime })
+  );
+
+  r.post("/voice/speech/browser/transcribe", requireOperatorSurfaceAccess, (req, res) =>
+    handleVoiceSpeechBrowserTranscribe(req, res, { speechGatewayFactory })
+  );
+
+  r.post("/voice/speech/browser/synthesize", requireOperatorSurfaceAccess, (req, res) =>
+    handleVoiceSpeechBrowserSynthesize(req, res, { speechGatewayFactory })
+  );
 
   r.post("/voice/browser/calls/:callId/realtime-link", requireOperatorSurfaceAccess, (req, res) =>
     handleBrowserVoiceRealtimeLink(req, res, {

@@ -7,6 +7,7 @@ import {
   clearAppSessionContext,
   getAppSessionContext,
 } from "../../lib/appSession.js";
+import { clearClientAuthState, isLoginPath } from "../../lib/clientAuthState.js";
 import { cx } from "../../lib/cx.js";
 import NotificationsPanel from "./NotificationsPanel.jsx";
 import { getActiveShellSection } from "./shellNavigation.js";
@@ -360,19 +361,17 @@ function WorkspaceControl({ notifications, workspaceMeta }) {
 
     try {
       await logoutUser();
-      clearAppSessionContext();
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
-      localStorage.removeItem("auth");
-      localStorage.removeItem("authUser");
-      sessionStorage.removeItem("token");
-      sessionStorage.removeItem("user");
-      sessionStorage.removeItem("auth");
-      sessionStorage.removeItem("authUser");
-      window.location.replace("/login");
     } catch (error) {
       console.error("Logout failed:", error);
-      setLoggingOut(false);
+    } finally {
+      clearAppSessionContext();
+      clearClientAuthState();
+
+      if (!isLoginPath(window.location.pathname)) {
+        window.location.replace("/login");
+      } else {
+        setLoggingOut(false);
+      }
     }
   }
 

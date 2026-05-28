@@ -1,4 +1,11 @@
-﻿const RAW = String(import.meta.env?.VITE_API_BASE ?? "").trim();
+import {
+  isStaleSessionRedirecting,
+  redirectToLoginForStaleAuth,
+  resetStaleAuthRedirect,
+} from "../lib/clientAuthState.js";
+
+const RAW = String(import.meta.env?.VITE_API_BASE ?? "").trim();
+
 const API_BASE = RAW ? RAW.replace(/\/+$/, "") : "";
 const DEFAULT_TIMEOUT_MS = 12000;
 const IS_DEV = Boolean(import.meta.env?.DEV);
@@ -165,6 +172,55 @@ function pickErr(payload, fallback) {
   return fallback;
 }
 
+function pathFromRequestPath(path = "") {
+  const value = s(path);
+
+  if (!value) return "";
+
+  try {
+    if (isAbsoluteUrl(value)) {
+      return new URL(value).pathname || "";
+    }
+
+    return new URL(value, "http://aihq.local").pathname || value;
+  } catch {
+    return value.split("?")[0].split("#")[0];
+  }
+}
+
+function isStaleAuthRedirectExemptApiPath(path = "") {
+  const pathname = pathFromRequestPath(path).replace(/\/+$/, "");
+
+  if (!pathname) return false;
+
+  return (
+    pathname === "/api/auth/login" ||
+    pathname === "/api/auth/logout" ||
+    pathname === "/api/auth/signup" ||
+    pathname === "/api/auth/verify-email" ||
+    pathname === "/api/auth/resend-verification" ||
+    pathname === "/api/auth/select-workspace" ||
+    pathname === "/api/auth/me" ||
+    pathname === "/api/admin-auth/login" ||
+    pathname === "/api/admin-auth/logout" ||
+    pathname === "/api/admin-auth/me" ||
+    pathname === "/api/auth/realtime-session" ||
+    pathname === "/auth/realtime-session" ||
+    pathname.endsWith("/session/current")
+  );
+}
+
+function isAuthRecoveryApiPath(path = "") {
+  const pathname = pathFromRequestPath(path).replace(/\/+$/, "");
+
+  return (
+    pathname === "/api/auth/login" ||
+    pathname === "/api/auth/signup" ||
+    pathname === "/api/auth/select-workspace" ||
+    pathname === "/api/auth/switch-workspace"
+  );
+}
+
 export async function apiRequest(path, options = {}) {
   const {
     method = "GET",
@@ -173,11 +229,25 @@ export async function apiRequest(path, options = {}) {
     credentials = "include",
     allowStatuses = [],
     rawBody = false,
+    authProtected = true,
     timeoutMs = DEFAULT_TIMEOUT_MS,
     signal: externalSignal,
   } = options;
 
   const url = apiUrl(path);
+  const staleRedirectExempt = isStaleAuthRedirectExemptApiPath(path);
+
+  if (
+    authProtected !== false &&
+    !staleRedirectExempt &&
+    isStaleSessionRedirecting()
+  ) {
+    const error = new Error("Stale auth redirect in progress");
+    error.status = 401;
+    error.code = "STALE_AUTH_REDIRECTING";
+    throw error;
+  }
+
   const headers = {
     Accept: "application/json",
     ...normalizeHeaders(extraHeaders),
@@ -279,7 +349,20 @@ export async function apiRequest(path, options = {}) {
     error.status = response.status;
     error.payload = payload;
     error.code = s(payload?.code || payload?.error);
+
+    if (
+      response.status === 401 &&
+      authProtected !== false &&
+      !staleRedirectExempt
+    ) {
+      redirectToLoginForStaleAuth();
+    }
+
     throw error;
+  }
+
+  if (isAuthRecoveryApiPath(path)) {
+    resetStaleAuthRedirect();
   }
 
   return payload;
@@ -308,5 +391,7 @@ export async function apiDelete(path, options = {}) {
 export const __test__ = {
   getBrowserOrigin,
   isLoopbackHostname,
+  isStaleAuthRedirectExemptApiPath,
+  pathFromRequestPath,
   shouldUseDevProxyBase,
 };

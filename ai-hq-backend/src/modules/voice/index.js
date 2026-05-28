@@ -29,3 +29,22 @@ export * from "./adapters/businessActionRequestRecord.js";
 export * from "./events/businessActionEvents.js";
 export * from "./sinks/businessActionSinkContracts.js";
 export * from "./sinks/businessActionSinkRegistry.js";
+
+export * from "./speech/voiceSpeechPipeline.js";
+export * from "./speech/voiceSpeechProviderConfig.js";
+export * from "./speech/voiceSpeechGateway.js";
+export * from "./speech/azConversationNaturalizer.js";
+export * from "./speech/providers/sonioxSpeechAdapter.js";
+
+export * from "./speech/providers/sonioxSpeechRuntimeConfig.js";
+export * from "./speech/providers/sonioxRealtimeWebsocketClient.js";
+export * from "./speech/providers/sonioxNodeWebsocketFactory.js";
+export * from "./speech/providers/sonioxTtsSession.js";
+export * from "./speech/providers/sonioxSttSession.js";
+export * from "./llm/providers/openaiLlmRuntimeConfig.js";
+export * from "./llm/providers/openaiTurnComposer.js";
+
+export * from "./pionero/pioneroLiveKitAgent.js";
+export * from "./pionero/pioneroLiveKitAgentRunner.js";
+export * from "./pionero/pioneroLiveKitAgentRuntime.js";
+export * from "./pionero/pioneroLiveKitRoomClassFactory.js";
